@@ -1,0 +1,11 @@
+build/
+cov_after/
+logs/
+transcript
+vsim.wlf
+*.wlf
+*.ucdb
+*.log
+*.scorecard.json
+modelsim.ini
+work/
