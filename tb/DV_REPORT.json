@@ -1,0 +1,209 @@
+{
+  "report_title": "rdma_cq_pusher Phase B",
+  "dut_name": "rdma_cq_pusher",
+  "date": "2026-05-10",
+  "rtl_variant": "rdma_cq_pusher_phase_b_smoke",
+  "seed": "1",
+  "signoff_scope": {
+    "phase": "Phase B",
+    "rtl_variant": "rdma_cq_pusher_phase_b_smoke",
+    "regression_script": "tb/uvm/Makefile target `regress` (smoke + cross_validate + merge_ucdb + coverage_report)",
+    "merged_ucdb": "tb/uvm/build/merged.ucdb",
+    "coverage_source": "tb/uvm/build/merged_coverage_summary.txt (vcover report -summary on tb/uvm/build/merged.ucdb)",
+    "signoff_status": "smoke complete, full Phase B regression pending (only B001/B002/B003 evidenced)"
+  },
+  "non_claims": [
+    "Full Phase B is not yet signed off; only the B001/B002/B003 smoke triplet has run.",
+    "EDGE (E-bucket), PROF (P-bucket), and ERROR (X-bucket) cases have no per-case UCDB yet.",
+    "No bucket_frame or all_buckets_frame continuous-frame run has been executed.",
+    "Coverage targets (per DV_COV.md) are not yet met: merged smoke coverage is 51.30% filtered."
+  ],
+  "implementation_summary": {
+    "implemented_count": 3,
+    "unimplemented_count": 509,
+    "catalog_backlog_count": 509,
+    "stale_artifact_without_engine_marker_count": 0
+  },
+  "failed_cases": [],
+  "bucket_summary": [
+    {
+      "bucket": "BASIC",
+      "planned_cases": 128,
+      "promoted_cases": 3,
+      "evidenced_cases": 3,
+      "merged_bucket_total": {
+        "stmt": {"pct": 61.36},
+        "branch": {"pct": 30.40},
+        "cond": {"pct": 14.01},
+        "expr": {"pct": 65.38},
+        "fsm_state": {"pct": 100.0},
+        "fsm_trans": {"pct": 44.44},
+        "toggle": {"pct": 6.93}
+      },
+      "functional_coverage": {
+        "pct": 2.34,
+        "evidenced": 3,
+        "planned": 128
+      }
+    },
+    {
+      "bucket": "EDGE",
+      "planned_cases": 128,
+      "promoted_cases": 0,
+      "evidenced_cases": 0,
+      "merged_bucket_total": {},
+      "functional_coverage": {
+        "pct": 0.0,
+        "evidenced": 0,
+        "planned": 128
+      }
+    },
+    {
+      "bucket": "PROF",
+      "planned_cases": 128,
+      "promoted_cases": 0,
+      "evidenced_cases": 0,
+      "merged_bucket_total": {},
+      "functional_coverage": {
+        "pct": 0.0,
+        "evidenced": 0,
+        "planned": 128
+      }
+    },
+    {
+      "bucket": "ERROR",
+      "planned_cases": 128,
+      "promoted_cases": 0,
+      "evidenced_cases": 0,
+      "merged_bucket_total": {},
+      "functional_coverage": {
+        "pct": 0.0,
+        "evidenced": 0,
+        "planned": 128
+      }
+    }
+  ],
+  "buckets": {
+    "BASIC": {
+      "planned_cases": 128,
+      "evidenced_cases": 3,
+      "merged_bucket_total": {
+        "stmt": {"pct": 61.36},
+        "branch": {"pct": 30.40},
+        "cond": {"pct": 14.01},
+        "expr": {"pct": 65.38},
+        "fsm_state": {"pct": 100.0},
+        "fsm_trans": {"pct": 44.44},
+        "toggle": {"pct": 6.93}
+      },
+      "merge_trace": [
+        {"step": "B001", "ucdb": "tb/uvm/cov_after/B001.ucdb"},
+        {"step": "B002", "ucdb": "tb/uvm/cov_after/B002.ucdb"},
+        {"step": "B003", "ucdb": "tb/uvm/cov_after/B003.ucdb"}
+      ],
+      "cases": [
+        {
+          "case_id": "B001",
+          "type": "directed",
+          "status": "pass",
+          "ucdb": "tb/uvm/cov_after/B001.ucdb",
+          "log": "tb/uvm/logs/B001.log",
+          "scorecard": "tb/uvm/cov_after/B001.scorecard.json",
+          "summary": "post-reset idle defaults; cq_tail=0, cnt_cqe_posted=0, dbg_state=IDLE, s_axis_cqe_tready=1; lineage_expected=0/lineage_actual=0/mismatch=0"
+        },
+        {
+          "case_id": "B002",
+          "type": "directed",
+          "status": "pass",
+          "ucdb": "tb/uvm/cov_after/B002.ucdb",
+          "log": "tb/uvm/logs/B002.log",
+          "scorecard": "tb/uvm/cov_after/B002.scorecard.json",
+          "summary": "single-CQE push, no doorbell credit constraint; cq_tail=1, cnt_cqe_posted=1; lineage_expected=1/lineage_actual=1/mismatch=0"
+        },
+        {
+          "case_id": "B003",
+          "type": "directed",
+          "status": "pass",
+          "ucdb": "tb/uvm/cov_after/B003.ucdb",
+          "log": "tb/uvm/logs/B003.log",
+          "scorecard": "tb/uvm/cov_after/B003.scorecard.json",
+          "summary": "CQE round-trip with cross-validating scoreboard under DEBUG=2; cq_tail=1, cnt_cqe_posted=1, dbg_last_pushed_meta cross-validated; lineage_expected=1/lineage_actual=1/mismatch=0"
+        }
+      ]
+    },
+    "EDGE": {
+      "planned_cases": 128,
+      "evidenced_cases": 0,
+      "merged_bucket_total": {},
+      "merge_trace": [],
+      "cases": []
+    },
+    "PROF": {
+      "planned_cases": 128,
+      "evidenced_cases": 0,
+      "merged_bucket_total": {},
+      "merge_trace": [],
+      "cases": []
+    },
+    "ERROR": {
+      "planned_cases": 128,
+      "evidenced_cases": 0,
+      "merged_bucket_total": {},
+      "merge_trace": [],
+      "cases": []
+    }
+  },
+  "totals": {
+    "planned_cases": 512,
+    "evidenced_cases": 3,
+    "merged_total_code_coverage": {
+      "stmt": {"pct": 61.36},
+      "branch": {"pct": 30.40},
+      "cond": {"pct": 14.01},
+      "expr": {"pct": 65.38},
+      "fsm_state": {"pct": 100.0},
+      "fsm_trans": {"pct": 44.44},
+      "toggle": {"pct": 6.93},
+      "filtered_total": 51.30
+    },
+    "functional_coverage": {
+      "pct": 0.59,
+      "evidenced": 3,
+      "planned": 512
+    }
+  },
+  "random_cases": [],
+  "signoff_runs": [
+    {
+      "run_id": "phase_b_smoke_b001_b002_b003",
+      "kind": "smoke_triplet",
+      "build_tag": "rdma_cq_pusher_phase_b_smoke",
+      "bucket": "BASIC",
+      "sequence_name": "regress (B001 + B002 + B003 + cross_validate + merge_ucdb)",
+      "case_count": 3,
+      "effort": "smoke",
+      "iter_cap": 1,
+      "payload_cap": 1,
+      "code_coverage": {
+        "stmt": {"pct": 61.36},
+        "branch": {"pct": 30.40},
+        "cond": {"pct": 14.01},
+        "expr": {"pct": 65.38},
+        "fsm_state": {"pct": 100.0},
+        "fsm_trans": {"pct": 44.44},
+        "toggle": {"pct": 6.93},
+        "filtered_total": 51.30
+      },
+      "cross_summary": {
+        "pct": 100.0,
+        "evidenced": 3,
+        "planned": 3,
+        "txns": 2,
+        "queued_overlap": 0,
+        "counter_checks_failed": 0,
+        "unexpected_outputs": 0,
+        "curve": "B001:0/0/0 -> B002:1/1/1 -> B003:1/1/1 (accepted/posted/lineage_match)"
+      }
+    }
+  ]
+}
