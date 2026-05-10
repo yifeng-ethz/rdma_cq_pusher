@@ -67,17 +67,39 @@ class rdma_cq_pusher_base_test extends uvm_test;
   function bit [511:0] make_cqe(input bit [15:0] sqe_id,
                                 input bit [15:0] retire_seq);
     bit [511:0] data;
+    bit [63:0] seed;
     data = '0;
-    data[63:0]    = 64'h0000_0000_0000_0040 + retire_seq;
-    data[127:64]  = 64'h0000_0000_0000_0020 + retire_seq;
-    data[191:128] = {32'h0000_0000, sqe_id, 16'h0001};
-    data[255:192] = 64'h4556_545f_0000_0000 | retire_seq;
-    data[319:256] = 64'h4653_545f_0000_0000 | retire_seq;
-    data[383:320] = 64'h4c53_545f_0000_0000 | retire_seq;
-    data[447:384] = 64'h4f50_515f_0000_0000 | sqe_id;
-    data[511:448] = {48'h5254_4952_455f, retire_seq};
+    seed = {sqe_id, retire_seq, sqe_id ^ retire_seq, sqe_id + retire_seq};
+    for (int unsigned word = 0; word < 8; word++) begin
+      bit [63:0] mixed;
+      mixed = seed ^ (64'h9e37_79b9_7f4a_7c15 * (word + 1));
+      mixed = {mixed[30:0], mixed[63:31]} ^ (64'hd1b5_4a32_d192_ed03 * (retire_seq + word + 1));
+      data[word*64 +: 64] = mixed;
+    end
+    data[159:144] = sqe_id;
+    data[143:128] = 16'h0001;
     return data;
   endfunction
+
+  function string get_dv_tb_dir();
+    string tb_dir;
+    if ($value$plusargs("DV_TB_DIR=%s", tb_dir))
+      return tb_dir;
+    return "";
+  endfunction
+
+  function int unsigned get_dv_seed();
+    int unsigned seed;
+    if ($value$plusargs("DV_SEED=%d", seed))
+      return seed;
+    return 1;
+  endfunction
+
+  task save_txn_checkpoint(input string checkpoint_case_id,
+                           input int unsigned txn_count);
+    `uvm_info("COV", $sformatf("checkpoint marker case=%s txn=%0d seed=%0d",
+                               checkpoint_case_id, txn_count, get_dv_seed()), UVM_LOW)
+  endtask
 
   task program_cfg(input bit [63:0] base, input bit [15:0] depth, input bit enable);
     csr_cfg_item item;
@@ -116,6 +138,29 @@ class rdma_cq_pusher_base_test extends uvm_test;
     meta.retire_seq = retire_seq;
     meta.origin_dma_done_seq = origin_dma_done_seq;
     meta.push_seq = push_seq;
+    meta.repack();
+
+    env.env_dbg1.cqe_cfg.enqueue(cqe);
+    env.env_dbg2.meta_cfg.enqueue(meta);
+  endtask
+
+  task send_cqe_with_last(input bit [15:0] sqe_id,
+                          input bit [15:0] retire_seq,
+                          input bit last);
+    cqe_item cqe;
+    cqe_meta_item meta;
+
+    cqe = cqe_item::type_id::create("cqe_last");
+    cqe.sqe_id = sqe_id;
+    cqe.last = last;
+    cqe.data = make_cqe(sqe_id, retire_seq);
+    cqe.meta = pack_meta(sqe_id, retire_seq, retire_seq, retire_seq);
+
+    meta = cqe_meta_item::type_id::create("meta_last");
+    meta.sqe_id = sqe_id;
+    meta.retire_seq = retire_seq;
+    meta.origin_dma_done_seq = retire_seq;
+    meta.push_seq = retire_seq;
     meta.repack();
 
     env.env_dbg1.cqe_cfg.enqueue(cqe);

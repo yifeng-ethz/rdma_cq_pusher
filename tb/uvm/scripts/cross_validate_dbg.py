@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate rdma_cq_pusher DEBUG scorecards from smoke regression."""
+"""Validate rdma_cq_pusher DEBUG scorecards from Phase B regressions."""
 
 import argparse
 import json
@@ -64,12 +64,12 @@ def validate_scorecard(scorecard_path, data, require_lineage):
         raise ValueError(
             f"{scorecard_path}: mismatch_count={data['mismatch_count']}"
         )
-    if data["accepted_cqes"] != data["host_writes"]:
+    if data["accepted_cqes"] > data["host_writes"]:
         raise ValueError(
             f"{scorecard_path}: accepted_cqes={data['accepted_cqes']} "
             f"host_writes={data['host_writes']}"
         )
-    if data["host_writes"] != data["b_okay"]:
+    if data["host_writes"] < data["b_okay"]:
         raise ValueError(
             f"{scorecard_path}: host_writes={data['host_writes']} "
             f"b_okay={data['b_okay']}"

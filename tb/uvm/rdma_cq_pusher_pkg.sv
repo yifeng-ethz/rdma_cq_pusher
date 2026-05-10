@@ -183,12 +183,12 @@ package rdma_cq_pusher_pkg;
   endclass
 
   `include "base_test.sv"
+  `include "tests/rdma_cq_pusher_phase_b_catalog.sv"
   `include "sequences/basic/basic_sequences.sv"
   `include "sequences/edge/edge_sequences.sv"
   `include "sequences/prof/prof_sequences.sv"
-  `include "tests/rdma_cq_pusher_b001_test.sv"
-  `include "tests/rdma_cq_pusher_b002_test.sv"
-  `include "tests/rdma_cq_pusher_b003_test.sv"
+  `include "sequences/phase_b/phase_b_case_engine.sv"
+  `include "tests/rdma_cq_pusher_phase_b_tests.sv"
 endpackage
 
 `endif
