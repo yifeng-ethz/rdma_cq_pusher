@@ -228,14 +228,15 @@ counter and the FSM state mirror).
 
 ### 7.1 Resource estimation
 
-Standalone sign-off estimates include the `DEBUG_LEVEL=1` DUT and the
-standalone virtual-pin environment used by Quartus, because the fitter
-summary reports virtual-pin ALMs as part of `Logic utilization (in
-ALMs)`.
+Standalone sign-off estimates include the `DEBUG_LEVEL=1` DUT plus the
+synthesizable `rdma_cq_pusher_standalone_harness` that drives the CQE
+stream and terminates the AXI4 write channel. The harness keeps only
+`clk`, `reset_n`, and a 32-bit status output at the top level, so the
+estimate is core/harness logic rather than virtual-pin dominated.
 
 | Metric | Estimate | Justification |
 |--------|---------:|---------------|
-| `ALM_estimate` | 1100 | 512-bit CQE payload latch, 64-bit address latch, one 16-bit ring pointer pair, three 32-bit counters, small FSM/control comparators, and virtual-pin ALMs comparable to sibling `rdma_sq_fetcher` standalone builds. |
+| `ALM_estimate` | 240 | 512-bit CQE payload latch maps mostly to flops packed into ALMs, plus 64-bit address latch, one 16-bit ring pointer pair, three 32-bit counters, small FSM/control comparators, and the standalone harness status mixer. |
 | `FF_estimate` | 620 | 512 payload flops plus address, ring, counter, FSM, and debug-1 status flops. |
 | `M20K_estimate` | 0 | No storage deeper than a single CQE latch; no FIFO or RAM is synthesized at `DEBUG_LEVEL=1`. |
 | `DSP_estimate` | 0 | Addressing is shift/add by 64 bytes and does not require multipliers. |

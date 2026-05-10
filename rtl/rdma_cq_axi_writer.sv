@@ -86,14 +86,12 @@ module rdma_cq_axi_writer #(
     logic writer_w_accept;
     logic writer_b_accept;
     logic writer_b_okay;
-    logic writer_b_error;
 
     assign writer_cmd_accept = write_cmd_valid && write_cmd_ready;
     assign writer_aw_accept  = m_axi_awvalid && m_axi_awready;
     assign writer_w_accept   = m_axi_wvalid && m_axi_wready;
     assign writer_b_accept   = m_axi_bvalid && m_axi_bready;
     assign writer_b_okay     = (m_axi_bresp == AXI_RESP_OKAY_CONST);
-    assign writer_b_error    = writer_b_accept && !writer_b_okay;
 
     assign write_cmd_ready = (writer.state == IDLING);
     assign write_done      = (writer.state == ADVANCING_TAIL);
