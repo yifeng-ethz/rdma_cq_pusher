@@ -141,6 +141,8 @@ class rdma_cq_pusher_base_test extends uvm_test;
   task run_phase(uvm_phase phase);
     phase.raise_objection(this);
     apply_reset();
+    env.scb.reset_model();
+    env.scb.configure_case(case_id, scorecard_path);
     `uvm_info("BASE", $sformatf("Starting case %s", case_id), UVM_LOW)
     run_case();
     wait_cycles(8);
