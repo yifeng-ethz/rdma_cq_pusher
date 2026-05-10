@@ -7,5 +7,7 @@ vsim.wlf
 *.ucdb
 *.log
 *.scorecard.json
+*.pyc
+__pycache__/
 modelsim.ini
 work/

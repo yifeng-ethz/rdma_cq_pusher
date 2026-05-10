@@ -32,10 +32,15 @@ TOP := rdma_cq_pusher_tb_top
 TEST ?= rdma_cq_pusher_base_test
 CASE_ID ?= BASE
 COV_CODE ?= sbecft
+SMOKE_CASE_IDS := B001 B002 B003
 SMOKE_CASES := \
   rdma_cq_pusher_b001_test:B001 \
   rdma_cq_pusher_b002_test:B002 \
   rdma_cq_pusher_b003_test:B003
+SMOKE_UCDBS := $(addprefix $(TB_DIR)/cov_after/,$(addsuffix .ucdb,$(SMOKE_CASE_IDS)))
+SMOKE_SCORECARDS := $(addprefix $(TB_DIR)/cov_after/,$(addsuffix .scorecard.json,$(SMOKE_CASE_IDS)))
+COVERAGE_REPORT ?= $(BUILD_DIR)/merged_coverage.txt
+COVERAGE_SUMMARY ?= $(BUILD_DIR)/merged_coverage_summary.txt
 
 RTL_SRCS := \
   $(IP_DIR)/rtl/rdma_cq_ring_state.sv \
@@ -70,9 +75,9 @@ ifneq ($(strip $(UVM_DPI_LIB)),)
 VSIM_FLAGS += -sv_lib $(UVM_DPI_LIB)
 endif
 
-.PHONY: all prepare compile run_one smoke merge_ucdb coverage_report clean
+.PHONY: all prepare compile run_one smoke cross_validate merge_ucdb coverage_report regress clean
 
-all: smoke
+all: regress
 
 prepare:
 	mkdir -p $(BUILD_DIR) $(TB_DIR)/cov_after $(TB_DIR)/logs
@@ -89,6 +94,12 @@ run_one: compile
 	  +SCORECARD=$(TB_DIR)/cov_after/$(CASE_ID).scorecard.json \
 	  -l $(TB_DIR)/logs/$(CASE_ID).log \
 	  -do "coverage save -onexit $(TB_DIR)/cov_after/$(CASE_ID).ucdb; run -all; quit -f"
+	@if grep -Eq "UVM_(ERROR|FATAL)[[:space:]]*:[[:space:]]*[1-9]" "$(TB_DIR)/logs/$(CASE_ID).log"; then \
+	  echo "UVM failure found in $(TB_DIR)/logs/$(CASE_ID).log"; \
+	  exit 1; \
+	fi
+	@test -s "$(TB_DIR)/cov_after/$(CASE_ID).ucdb" || \
+	  (echo "Missing UCDB $(TB_DIR)/cov_after/$(CASE_ID).ucdb"; exit 1)
 
 smoke:
 	@for entry in $(SMOKE_CASES); do \
@@ -96,11 +107,23 @@ smoke:
 	  $(MAKE) TEST=$$test_name CASE_ID=$$case_id run_one || exit $$?; \
 	done
 
+cross_validate:
+	$(PYTHON) $(TB_DIR)/scripts/cross_validate_dbg.py \
+	  --scorecards $(SMOKE_SCORECARDS) \
+	  --require-lineage B002 --require-lineage B003
+
 merge_ucdb:
-	$(VCOVER) merge -out $(BUILD_DIR)/merged.ucdb $(TB_DIR)/cov_after/*.ucdb
+	@for ucdb in $(SMOKE_UCDBS); do \
+	  test -s "$$ucdb" || { echo "Missing smoke UCDB $$ucdb"; exit 1; }; \
+	done
+	$(VCOVER) merge -out $(BUILD_DIR)/merged.ucdb $(SMOKE_UCDBS)
 
 coverage_report:
-	$(VCOVER) report -details -codeAll $(BUILD_DIR)/merged.ucdb
+	$(VCOVER) report -summary $(BUILD_DIR)/merged.ucdb > $(COVERAGE_SUMMARY)
+	$(VCOVER) report -details -codeAll $(BUILD_DIR)/merged.ucdb > $(COVERAGE_REPORT)
+	@cat $(COVERAGE_SUMMARY)
+
+regress: smoke cross_validate merge_ucdb coverage_report
 
 clean:
 	@echo "Manual cleanup required by project rule: no removal command is run by this Makefile."
