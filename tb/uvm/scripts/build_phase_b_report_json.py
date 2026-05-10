@@ -49,12 +49,13 @@ ROW_RE = re.compile(
     r"\|\s*([0-9]+)\s*"
     r"\|\s*(.*?)\s*"
     r"\|\s*(.*?)\s*"
+    r"\|\s*(.*?)\s*"
     r"\|"
 )
 
 COVERAGE_RE = re.compile(
     r"^\s*(Branches|Conditions|Expressions|FSM States|FSM Transitions|Statements|Toggles)"
-    r"\s+\S+\s+\S+\s+\S+\s+\S+\s+([0-9.]+)%"
+    r"\s+([0-9]+)\s+([0-9]+)\s+([0-9]+)\s+\S+\s+([0-9.]+)%"
 )
 FILTERED_RE = re.compile(r"Total coverage \(filtered view\):\s*([0-9.]+)%")
 
@@ -68,6 +69,7 @@ class CasePlan:
     iteration: int
     stimulus: str
     pass_criteria: str
+    function_reference: str
 
 
 def parse_args() -> argparse.Namespace:
@@ -105,7 +107,15 @@ def parse_plan(tb_dir: Path) -> dict[str, CasePlan]:
             match = ROW_RE.match(line)
             if not match:
                 continue
-            case_id, method, scenario, iteration, stimulus, pass_criteria = match.groups()
+            (
+                case_id,
+                method,
+                scenario,
+                iteration,
+                stimulus,
+                pass_criteria,
+                function_reference,
+            ) = match.groups()
             if not case_id.startswith(prefix):
                 raise ValueError(f"{path}: case {case_id} is not in {bucket}")
             cases[case_id] = CasePlan(
@@ -116,12 +126,31 @@ def parse_plan(tb_dir: Path) -> dict[str, CasePlan]:
                 iteration=int(iteration),
                 stimulus=clean_md(stimulus),
                 pass_criteria=clean_md(pass_criteria),
+                function_reference=clean_md(function_reference),
             )
-    expected = {f"{prefix}{idx:03d}" for _, _, prefix in BUCKET_DOCS for idx in range(1, 129)}
+    expected = {
+        f"{prefix}{idx:03d}"
+        for _, _, prefix in BUCKET_DOCS
+        for idx in range(1, 129)
+    }
     missing = sorted(expected - set(cases))
     extra = sorted(set(cases) - expected)
     if missing or extra:
         raise ValueError(f"case catalog mismatch: missing={missing[:8]} extra={extra[:8]}")
+    tbd = sorted(
+        case.case_id for case in cases.values() if case.function_reference.upper() == "TBD"
+    )
+    if tbd:
+        raise ValueError(f"Function Reference still TBD for {len(tbd)} cases: {tbd[:8]}")
+    refs: dict[str, str] = {}
+    duplicate_refs: list[tuple[str, str, str]] = []
+    for case in cases.values():
+        previous = refs.setdefault(case.function_reference, case.case_id)
+        if previous != case.case_id:
+            duplicate_refs.append((case.function_reference, previous, case.case_id))
+    if duplicate_refs:
+        ref, first, second = duplicate_refs[0]
+        raise ValueError(f"Function Reference is not unique: {ref!r} used by {first} and {second}")
     return cases
 
 
@@ -155,7 +184,9 @@ def log_counts(path: Path) -> dict[str, int]:
     }
 
 
-def run_vcover_summary(vcover: str, ucdb: Path, output: Path) -> dict[str, dict[str, float]]:
+def run_vcover_summary(
+    vcover: str, ucdb: Path, output: Path, normalize_phase_b: bool = True
+) -> dict[str, dict[str, float]]:
     if not ucdb.is_file() or ucdb.stat().st_size == 0:
         raise ValueError(f"missing merged UCDB {ucdb}")
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -168,26 +199,44 @@ def run_vcover_summary(vcover: str, ucdb: Path, output: Path) -> dict[str, dict[
         )
     if result.returncode != 0:
         raise ValueError(f"vcover summary failed for {ucdb}; see {output}")
-    return parse_coverage_summary(output)
+    return parse_coverage_summary(output, normalize_phase_b=normalize_phase_b)
 
 
-def parse_coverage_summary(path: Path) -> dict[str, dict[str, float]]:
+def empty_coverage() -> dict[str, dict[str, float]]:
+    return {
+        key: {"bins": 0, "hits": 0, "misses": 0, "pct": 0.0, "raw_pct": 0.0}
+        for key in COV_ORDER
+    }
+
+
+def parse_coverage_summary(
+    path: Path, normalize_phase_b: bool = True
+) -> dict[str, dict[str, float]]:
     coverage: dict[str, dict[str, float]] = {}
     filtered_total: float | None = None
     for line in path.read_text(encoding="ascii", errors="ignore").splitlines():
         match = COVERAGE_RE.match(line)
         if match:
-            pct = round(float(match.group(2)), 2)
-            coverage[COV_KEYS[match.group(1)]] = {"pct": pct, "raw_pct": pct}
+            pct = round(float(match.group(5)), 2)
+            coverage[COV_KEYS[match.group(1)]] = {
+                "bins": int(match.group(2)),
+                "hits": int(match.group(3)),
+                "misses": int(match.group(4)),
+                "pct": pct,
+                "raw_pct": pct,
+            }
             continue
         filtered = FILTERED_RE.search(line)
         if filtered:
             filtered_total = round(float(filtered.group(1)), 2)
     for key in COV_ORDER:
-        coverage.setdefault(key, {"pct": 0.0, "raw_pct": 0.0})
+        coverage.setdefault(
+            key, {"bins": 0, "hits": 0, "misses": 0, "pct": 0.0, "raw_pct": 0.0}
+        )
     if filtered_total is not None:
         coverage["filtered_total"] = filtered_total
-    apply_phase_b_filter(coverage)
+    if normalize_phase_b:
+        apply_phase_b_filter(coverage)
     return coverage
 
 
@@ -258,6 +307,117 @@ def metric_ok(coverage: dict[str, dict[str, float]]) -> bool:
     return True
 
 
+def coverage_delta(
+    merged_after: dict[str, dict[str, float]],
+    merged_before: dict[str, dict[str, float]],
+) -> dict[str, dict[str, float]]:
+    gain: dict[str, dict[str, float]] = {}
+    for key in COV_ORDER:
+        after = merged_after.get(key, {})
+        before = merged_before.get(key, {})
+        hit_delta = int(after.get("hits", 0)) - int(before.get("hits", 0))
+        merged_pct_after = round(float(after.get("raw_pct", after.get("pct", 0.0))), 2)
+        pct_delta = round(
+            merged_pct_after - float(before.get("raw_pct", before.get("pct", 0.0))),
+            2,
+        )
+        gain[key] = {
+            "pct": pct_delta,
+            "hit_delta": hit_delta,
+            "hits_after": int(after.get("hits", 0)),
+            "bins": int(after.get("bins", 0)),
+            "merged_pct_after": merged_pct_after,
+        }
+    return gain
+
+
+def coverage_per_txn(
+    coverage: dict[str, dict[str, float]],
+    txn_count: int,
+    delta_mode: bool = False,
+) -> dict[str, dict[str, float]]:
+    if txn_count <= 0:
+        return {}
+    scaled: dict[str, dict[str, float]] = {}
+    for key in COV_ORDER:
+        value = coverage.get(key, {})
+        pct = float(value.get("pct", 0.0)) / txn_count
+        entry: dict[str, float] = {"pct": round(pct, 6)}
+        if delta_mode:
+            entry["hit_delta_per_txn"] = round(
+                float(value.get("hit_delta", 0)) / txn_count, 6
+            )
+        else:
+            entry["hits_per_txn"] = round(float(value.get("hits", 0)) / txn_count, 6)
+        scaled[key] = entry
+    return scaled
+
+
+def nonzero_gain(gain: dict[str, dict[str, float]]) -> bool:
+    return sum(int(value.get("hit_delta", 0)) for value in gain.values()) > 0
+
+
+def merge_ucdbs(vcover: str, inputs: list[Path], output: Path, log_path: Path) -> None:
+    output.parent.mkdir(parents=True, exist_ok=True)
+    result = subprocess.run(
+        [vcover, "merge", "-out", str(output), *(str(path) for path in inputs)],
+        text=True,
+        capture_output=True,
+    )
+    log_path.write_text(result.stdout + result.stderr, encoding="ascii", errors="ignore")
+    if result.returncode != 0:
+        raise ValueError(f"vcover merge failed for {output}; see {log_path}")
+
+
+def build_bucket_incremental_coverage(
+    vcover: str,
+    tb_uvm: Path,
+    build_dir: Path,
+    bucket: str,
+    bucket_cases: list[CasePlan],
+) -> dict[str, dict[str, Any]]:
+    audit_dir = build_dir / "unique_coverage_audit" / bucket.lower()
+    audit_dir.mkdir(parents=True, exist_ok=True)
+    previous_cov = empty_coverage()
+    previous_ucdb: Path | None = None
+    by_case: dict[str, dict[str, Any]] = {}
+    for case in bucket_cases:
+        ucdb = tb_uvm / "cov_after" / f"{case.case_id}.ucdb"
+        standalone = run_vcover_summary(
+            vcover,
+            ucdb,
+            audit_dir / f"{case.case_id}_standalone_summary.txt",
+            normalize_phase_b=False,
+        )
+        merged_ucdb = audit_dir / f"{case.case_id}_merged.ucdb"
+        merge_inputs = [ucdb] if previous_ucdb is None else [previous_ucdb, ucdb]
+        merge_ucdbs(
+            vcover, merge_inputs, merged_ucdb, audit_dir / f"{case.case_id}_merge.log"
+        )
+        merged_after = run_vcover_summary(
+            vcover,
+            merged_ucdb,
+            audit_dir / f"{case.case_id}_merged_summary.txt",
+            normalize_phase_b=False,
+        )
+        gain = coverage_delta(merged_after, previous_cov)
+        if not nonzero_gain(gain) and "duplicate of" not in case.pass_criteria.lower():
+            raise ValueError(
+                f"{case.case_id}: zero incremental coverage without duplicate justification"
+            )
+        by_case[case.case_id] = {
+            "standalone_coverage": standalone,
+            "bucket_gain_by_case": gain,
+            "bucket_merged_total_after_case": merged_after,
+            "incremental_hit_delta_total": sum(
+                int(value.get("hit_delta", 0)) for value in gain.values()
+            ),
+        }
+        previous_cov = merged_after
+        previous_ucdb = merged_ucdb
+    return by_case
+
+
 def bucket_prefix(bucket: str) -> str:
     return {"BASIC": "B", "EDGE": "E", "PROF": "P", "ERROR": "X"}[bucket]
 
@@ -285,7 +445,7 @@ def make_case_entry(
     log_summary: dict[str, int],
     build_tag: str,
     seed: int,
-    bucket_cov: dict[str, dict[str, float]],
+    coverage_audit: dict[str, Any],
     growth: list[dict[str, Any]],
 ) -> dict[str, Any]:
     failed = (
@@ -313,16 +473,24 @@ def make_case_entry(
         "b_okay": int(scorecard.get("b_okay", 0)),
         "scenario": case.scenario,
         "primary_checks": case.pass_criteria,
+        "function_reference": case.function_reference,
         "contract_anchor": "tb/{doc} row {case_id}; tb/uvm/cov_after/{case_id}.ucdb; tb/uvm/cov_after/{case_id}.scorecard.json".format(
             doc={"BASIC": "DV_BASIC.md", "EDGE": "DV_EDGE.md", "PROF": "DV_PROF.md", "ERROR": "DV_ERROR.md"}[case.bucket],
             case_id=case.case_id,
         ),
         "log_summary": log_summary,
-        "standalone_coverage": {},
-        "isolated_cov_per_txn": {},
-        "bucket_gain_by_case": {},
-        "bucket_merged_total_after_case": bucket_cov,
-        "bucket_gain_per_txn": {},
+        "standalone_coverage": coverage_audit["standalone_coverage"],
+        "isolated_cov_per_txn": coverage_per_txn(
+            coverage_audit["standalone_coverage"], int(scorecard.get("accepted_cqes", 0))
+        ),
+        "bucket_gain_by_case": coverage_audit["bucket_gain_by_case"],
+        "bucket_merged_total_after_case": coverage_audit["bucket_merged_total_after_case"],
+        "bucket_gain_per_txn": coverage_per_txn(
+            coverage_audit["bucket_gain_by_case"],
+            int(scorecard.get("accepted_cqes", 0)),
+            delta_mode=True,
+        ),
+        "incremental_hit_delta_total": coverage_audit["incremental_hit_delta_total"],
     }
     if growth:
         entry["txn_growth_curve"] = growth
@@ -363,6 +531,9 @@ def build_json(args: argparse.Namespace) -> dict[str, Any]:
     for bucket, _, _ in BUCKET_DOCS:
         prefix = bucket_prefix(bucket)
         bucket_cases = [cases[f"{prefix}{idx:03d}"] for idx in range(1, 129)]
+        incremental_coverage = build_bucket_incremental_coverage(
+            args.vcover, tb_uvm, build_dir, bucket, bucket_cases
+        )
         bucket_entries: list[dict[str, Any]] = []
         merge_trace: list[dict[str, Any]] = []
         bucket_txns = 0
@@ -381,7 +552,7 @@ def build_json(args: argparse.Namespace) -> dict[str, Any]:
                 log_summary,
                 args.build_tag,
                 args.seed,
-                coverage_by_bucket[bucket],
+                incremental_coverage[case.case_id],
                 growth,
             )
             bucket_entries.append(entry)
@@ -398,7 +569,9 @@ def build_json(args: argparse.Namespace) -> dict[str, Any]:
                     "case_id": case.case_id,
                     "full_case_id": case.case_id,
                     "ucdb": f"tb/uvm/cov_after/{case.case_id}.ucdb",
-                    "merged_total_after_case": coverage_by_bucket[bucket],
+                    "incremental_hit_delta_total": entry["incremental_hit_delta_total"],
+                    "bucket_gain_by_case": entry["bucket_gain_by_case"],
+                    "merged_total_after_case": entry["bucket_merged_total_after_case"],
                 }
             )
 
@@ -475,6 +648,7 @@ def build_json(args: argparse.Namespace) -> dict[str, Any]:
     non_claims = [
         "No Phase B case exclusions or waivers are claimed.",
         "Raw unfiltered vcover summaries remain under tb/uvm/build; dashboard coverage uses the documented Phase-B static-bin filter.",
+        "Zero-increment per-case code coverage rows are retained only with an explicit Pass Criteria duplicate-of-baseline justification.",
     ]
 
     return {
@@ -489,6 +663,7 @@ def build_json(args: argparse.Namespace) -> dict[str, Any]:
             "regression_script": "tb/uvm/Makefile target regress",
             "case_catalog": "tb/DV_BASIC.md + tb/DV_EDGE.md + tb/DV_PROF.md + tb/DV_ERROR.md",
             "per_case_ucdbs": "tb/uvm/cov_after/<CASE>.ucdb",
+            "per_case_unique_coverage": "standalone UCDB plus bucket-ordered incremental hit deltas in tb/DV_REPORT.json",
             "per_bucket_ucdbs": "tb/uvm/build/{basic,edge,prof,error}_merged.ucdb",
             "merged_ucdb": "tb/uvm/build/merged.ucdb",
             "coverage_source": "vcover report -summary on real merged UCDBs",

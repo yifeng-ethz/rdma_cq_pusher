@@ -28,6 +28,7 @@ This page is the chief-architect dashboard. All per-case evidence lives under [`
 | regression_script | `tb/uvm/Makefile target regress` |
 | case_catalog | `tb/DV_BASIC.md + tb/DV_EDGE.md + tb/DV_PROF.md + tb/DV_ERROR.md` |
 | per_case_ucdbs | `tb/uvm/cov_after/<CASE>.ucdb` |
+| per_case_unique_coverage | `standalone UCDB plus bucket-ordered incremental hit deltas in tb/DV_REPORT.json` |
 | per_bucket_ucdbs | `tb/uvm/build/{basic,edge,prof,error}_merged.ucdb` |
 | merged_ucdb | `tb/uvm/build/merged.ucdb` |
 | coverage_source | `vcover report -summary on real merged UCDBs` |
@@ -39,6 +40,7 @@ This page is the chief-architect dashboard. All per-case evidence lives under [`
 
 - No Phase B case exclusions or waivers are claimed.
 - Raw unfiltered vcover summaries remain under tb/uvm/build; dashboard coverage uses the documented Phase-B static-bin filter.
+- Zero-increment per-case code coverage rows are retained only with an explicit Pass Criteria duplicate-of-baseline justification.
 
 ## Bucket Summary
 
