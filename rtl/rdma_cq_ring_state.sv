@@ -2,7 +2,7 @@
 // Author  : Yifeng Wang (yifenwan@phys.ethz.ch)
 // Version : 26.1.0
 // Date    : 20260510
-// Change  : implement CQ head/tail state for AXI4 CQE pusher
+// Change  : support 16-bit max-depth CQ ring wrap encoding
 
 `default_nettype none
 
@@ -39,16 +39,14 @@ module rdma_cq_ring_state #(
 
     logic [15:0] ring_depth_mask;
     logic [15:0] ring_next_tail;
-    logic        ring_depth_valid;
 
-    assign ring_depth_valid = (cfg_cq_depth != 16'h0000);
-    assign ring_depth_mask  = ring_depth_valid ? (cfg_cq_depth - 16'd1) : 16'h0000;
+    assign ring_depth_mask  = cfg_cq_depth - 16'd1;
     assign ring_next_tail   = (ring.tail + 16'd1) & ring_depth_mask;
 
     assign cur_cq_tail = ring.tail;
     assign cur_cq_head = ring.head;
     assign cq_empty    = (ring.tail == ring.head);
-    assign cq_full     = !ring_depth_valid || (ring_next_tail == ring.head);
+    assign cq_full     = (ring_next_tail == ring.head);
 
     always_ff @(posedge clk or negedge reset_n) begin : ring_bookkeeper
         if (!reset_n) begin
@@ -58,7 +56,7 @@ module rdma_cq_ring_state #(
                 ring.head <= cq_head_dbl_value & ring_depth_mask;
             end
 
-            if (advance_tail && ring_depth_valid) begin
+            if (advance_tail) begin
                 ring.tail <= ring_next_tail;
             end
         end
