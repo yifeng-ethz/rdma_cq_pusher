@@ -472,6 +472,7 @@ def make_case_entry(
         "host_writes": int(scorecard.get("host_writes", 0)),
         "b_okay": int(scorecard.get("b_okay", 0)),
         "scenario": case.scenario,
+        "stimulus": case.stimulus,
         "primary_checks": case.pass_criteria,
         "function_reference": case.function_reference,
         "contract_anchor": "tb/{doc} row {case_id}; tb/uvm/cov_after/{case_id}.ucdb; tb/uvm/cov_after/{case_id}.scorecard.json".format(
