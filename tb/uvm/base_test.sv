@@ -57,6 +57,83 @@ class rdma_cq_pusher_base_test extends uvm_test;
     repeat (cycles) @(posedge vif.clk);
   endtask
 
+  function bit [63:0] pack_meta(input bit [15:0] sqe_id,
+                                input bit [15:0] retire_seq,
+                                input bit [15:0] origin_dma_done_seq,
+                                input bit [15:0] push_seq);
+    return {push_seq, origin_dma_done_seq, retire_seq, sqe_id};
+  endfunction
+
+  function bit [511:0] make_cqe(input bit [15:0] sqe_id,
+                                input bit [15:0] retire_seq);
+    bit [511:0] data;
+    data = '0;
+    data[63:0]    = 64'h0000_0000_0000_0040 + retire_seq;
+    data[127:64]  = 64'h0000_0000_0000_0020 + retire_seq;
+    data[191:128] = {32'h0000_0000, sqe_id, 16'h0001};
+    data[255:192] = 64'h4556_545f_0000_0000 | retire_seq;
+    data[319:256] = 64'h4653_545f_0000_0000 | retire_seq;
+    data[383:320] = 64'h4c53_545f_0000_0000 | retire_seq;
+    data[447:384] = 64'h4f50_515f_0000_0000 | sqe_id;
+    data[511:448] = {48'h5254_4952_455f, retire_seq};
+    return data;
+  endfunction
+
+  task program_cfg(input bit [63:0] base, input bit [15:0] depth, input bit enable);
+    csr_cfg_item item;
+    item = csr_cfg_item::type_id::create("cfg_item");
+    item.base = base;
+    item.depth = depth;
+    item.enable = enable;
+    env.env_dbg1.csr_cfg.enqueue(item);
+    env.env_dbg1.host_axi_cfg.configure(base, depth);
+    wait_cycles(2);
+  endtask
+
+  task pulse_doorbell(input bit [15:0] value);
+    doorbell_item item;
+    item = doorbell_item::type_id::create("doorbell_item");
+    item.value = value;
+    env.env_dbg1.doorbell_cfg.enqueue(item);
+    wait_cycles(2);
+  endtask
+
+  task send_cqe(input bit [15:0] sqe_id,
+                input bit [15:0] retire_seq,
+                input bit [15:0] origin_dma_done_seq = 16'h0000,
+                input bit [15:0] push_seq = 16'h0000);
+    cqe_item cqe;
+    cqe_meta_item meta;
+
+    cqe = cqe_item::type_id::create("cqe");
+    cqe.sqe_id = sqe_id;
+    cqe.last = 1'b1;
+    cqe.data = make_cqe(sqe_id, retire_seq);
+    cqe.meta = pack_meta(sqe_id, retire_seq, origin_dma_done_seq, push_seq);
+
+    meta = cqe_meta_item::type_id::create("meta");
+    meta.sqe_id = sqe_id;
+    meta.retire_seq = retire_seq;
+    meta.origin_dma_done_seq = origin_dma_done_seq;
+    meta.push_seq = push_seq;
+    meta.repack();
+
+    env.env_dbg1.cqe_cfg.enqueue(cqe);
+    env.env_dbg2.meta_cfg.enqueue(meta);
+  endtask
+
+  task wait_for_posts(input int unsigned count, input int unsigned timeout_cycles = 1000);
+    int unsigned start_count;
+    start_count = vif.cnt_cqe_posted;
+    for (int unsigned cycle = 0; cycle < timeout_cycles; cycle++) begin
+      if ((vif.cnt_cqe_posted - start_count) >= count)
+        return;
+      @(posedge vif.clk);
+    end
+    `uvm_fatal("TIMEOUT", $sformatf("%s timed out waiting for %0d posts; observed delta=%0d",
+                                    case_id, count, vif.cnt_cqe_posted - start_count))
+  endtask
+
   virtual task run_case();
     wait_cycles(4);
   endtask
