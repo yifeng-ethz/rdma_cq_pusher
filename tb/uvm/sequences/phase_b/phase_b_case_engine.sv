@@ -49,8 +49,10 @@ class rdma_cq_pusher_phase_b_case_test extends rdma_cq_pusher_base_test;
   endtask
 
   task local_reset(input int unsigned low_cycles = 4);
+    @(negedge vif.clk);
     vif.reset_n <= 1'b0;
     repeat (low_cycles) @(posedge vif.clk);
+    @(negedge vif.clk);
     vif.reset_n <= 1'b1;
     repeat (4) @(posedge vif.clk);
     env.scb.reset_model();

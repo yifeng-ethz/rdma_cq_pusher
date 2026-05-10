@@ -1,6 +1,6 @@
 # ✅ phase_b_smoke_b001_b002_b003
 
-**Kind:** `smoke_triplet` &nbsp; **Build:** `rdma_cq_pusher_phase_b_smoke` &nbsp; **Bucket:** `BASIC` &nbsp; **Sequence:** `regress (B001 + B002 + B003 + cross_validate + merge_ucdb)`
+**Kind:** `smoke_triplet_retained` &nbsp; **Build:** `phase_b_all_cases` &nbsp; **Bucket:** `BASIC` &nbsp; **Sequence:** `B001+B002+B003 subset retained for continuity`
 
 ## Summary
 
@@ -18,10 +18,10 @@
 | status | field | value |
 |:---:|---|---|
 | ℹ️ | case_count | `3` |
-| ℹ️ | effort | `smoke` |
-| ℹ️ | iter_cap | `1` |
-| ℹ️ | payload_cap | `1` |
-| ℹ️ | txns | `2` |
+| ℹ️ | effort | `full_phase_b` |
+| ℹ️ | iter_cap | `plan` |
+| ℹ️ | payload_cap | `plan` |
+| ℹ️ | txns | `0` |
 | ✅ | functional_cross_pct | `100.0` |
 | ℹ️ | queued_overlap | `0` |
 | ✅ | counter_checks_failed | `0` |
@@ -33,20 +33,22 @@
 
 | metric | pct |
 |---|---|
-| stmt | 61.36 |
-| branch | 30.40 |
-| cond | 14.01 |
-| expr | 65.38 |
+| stmt | 98.07 |
+| branch | 94.44 |
+| cond | 63.63 |
+| expr | 100.00 |
 | fsm_state | 100.00 |
-| fsm_trans | 44.44 |
-| toggle | 6.93 |
+| fsm_trans | 100.00 |
+| toggle | 100.00 |
 
 ## Transaction growth curve
 
 <!-- each row is one transaction step: which planned case fired, current functional-cross percent, -->
 <!-- delta_bins = number of new cross bins hit at this step; reason = scoreboard checkpoint trigger. -->
 
-❓ no curve data available for this run.
+| txn | case | seq | pct | delta_bins | reason |
+|---:|---|---|---|---:|---|
+| 0 | `BASIC` | `phase_b_smoke_b001_b002_b003` | 100.0 | 3 | scorecard_cross_validate |
 
 ---
 _Back to [dashboard](../../DV_REPORT.md)_
