@@ -20,14 +20,15 @@ plane CQE bookkeeping.
 ```
 rdma_cq_pusher.sv               (top)
 ├── rdma_cq_ring_state.sv       (head/tail/depth state)
-├── rdma_cq_avmm_writer.sv      (AXI4 master that issues 64 B writes)
+├── rdma_cq_axi_writer.sv       (AXI4 master that issues 64 B writes)
 ├── rdma_cq_msix.sv             (Phase 2 — interrupt generator; Phase 1 stub)
-└── rdma_cq_pusher_dbg_meta_fifo.sv  (DEBUG_LEVEL >= 2, sim-only sidecar FIFO)
+└── rdma_cq_pusher.sv           (top wiring and counter aggregation)
 ```
 
-The trailing `*_dbg_meta_fifo.sv` is wrapped in
-`generate-if (DEBUG_LEVEL >= 2)` and `// synthesis translate_off` /
-`_on` pragmas, so synthesis at `DEBUG_LEVEL <= 1` never instantiates it.
+The DEBUG-2 lineage sidecar is threaded through the top into
+`rdma_cq_axi_writer.sv` inside `// synthesis translate_off` / `_on`
+guards. Synthesis at `DEBUG_LEVEL <= 1` never sees the widened sidecar
+storage.
 
 ## 3. Top-level interface
 
@@ -136,9 +137,8 @@ atomic cacheline write** for each CQE. No torn read: the host either
 sees the entire previous CQE or the entire new one.
 
 The DEBUG-2 sidecar **does not** flow into AXI4 wdata. It propagates
-through a sim-only meta-FIFO (`rdma_cq_pusher_dbg_meta_fifo.sv` —
-gated by `generate-if (DEBUG_LEVEL >= 2)`) parallel to the W/B path so
-the DEBUG-2 monitor can map every host CQ slot back to a
+through sim-only sidecar registers in `rdma_cq_axi_writer.sv` parallel
+to the W/B path so the DEBUG-2 monitor can map every host CQ slot back to a
 `(sqe_id, retire_seq, origin_dma_done_seq, push_seq)` tuple. The
 functional path is bit-identical regardless of `DEBUG_LEVEL`.
 
@@ -226,8 +226,25 @@ master and the resource delta vs `DEBUG_LEVEL=0` is bounded
 (target: < 5% ALM growth, owned mostly by the saturating stall
 counter and the FSM state mirror).
 
-Estimated logic at `DEBUG_LEVEL=0`: ~120 ALMs + tiny CQE-latch RAM.
-Estimated logic at `DEBUG_LEVEL=1`: ~150 ALMs (small adders + counters).
+### 7.1 Resource estimation
+
+Standalone sign-off estimates include the `DEBUG_LEVEL=1` DUT and the
+standalone virtual-pin environment used by Quartus, because the fitter
+summary reports virtual-pin ALMs as part of `Logic utilization (in
+ALMs)`.
+
+| Metric | Estimate | Justification |
+|--------|---------:|---------------|
+| `ALM_estimate` | 1100 | 512-bit CQE payload latch, 64-bit address latch, one 16-bit ring pointer pair, three 32-bit counters, small FSM/control comparators, and virtual-pin ALMs comparable to sibling `rdma_sq_fetcher` standalone builds. |
+| `FF_estimate` | 620 | 512 payload flops plus address, ring, counter, FSM, and debug-1 status flops. |
+| `M20K_estimate` | 0 | No storage deeper than a single CQE latch; no FIFO or RAM is synthesized at `DEBUG_LEVEL=1`. |
+| `DSP_estimate` | 0 | Addressing is shift/add by 64 bytes and does not require multipliers. |
+
+Acceptance uses `ALM_estimate`, `M20K_estimate`, and `DSP_estimate` from
+this table. The CQE latch is intentionally implemented in registers so
+the single in-flight write can retry after a non-OKAY BRESP without
+refetching the upstream stream beat.
+
 `DEBUG_LEVEL=2` is **never synthesized**; the gate is asserted in
 `rtl/rdma_cq_pusher.sv` via:
 
@@ -259,9 +276,8 @@ rdma_cq_pusher/
 ├── rtl/
 │   ├── rdma_cq_pusher.sv                    (top, owns DEBUG_LEVEL parameter)
 │   ├── rdma_cq_ring_state.sv                (head/tail/depth, exposes dbg_* taps)
-│   ├── rdma_cq_avmm_writer.sv               (AXI4 master FSM, exposes dbg_* taps)
-│   ├── rdma_cq_msix.sv                      (Phase 1 stub: ties msix_req=0)
-│   └── rdma_cq_pusher_dbg_meta_fifo.sv      (DEBUG_LEVEL >= 2, sim-only sidecar FIFO)
+│   ├── rdma_cq_axi_writer.sv                (AXI4 master FSM, exposes dbg_* taps)
+│   └── rdma_cq_msix.sv                      (Phase 1 stub: ties msix_req=0)
 ├── tb/
 │   ├── DV_PLAN.md                           (companion to RTL_PLAN.md, dual-env scope)
 │   ├── DV_HARNESS.md                        (dual UVM env DEBUG=1 / DEBUG=2 + shared SB)
@@ -284,16 +300,15 @@ rdma_cq_pusher/
 ## 9. Implementation order
 
 1. `rtl/rdma_cq_ring_state.sv` (with DEBUG_LEVEL>=1 dbg_* taps)
-2. `rtl/rdma_cq_avmm_writer.sv` (with DEBUG_LEVEL>=1 dbg_* taps)
+2. `rtl/rdma_cq_axi_writer.sv` (with DEBUG_LEVEL>=1 dbg_* taps)
 3. `rtl/rdma_cq_msix.sv` (Phase 1 stub)
-4. `rtl/rdma_cq_pusher_dbg_meta_fifo.sv` (DEBUG_LEVEL>=2, sim-only)
-5. `rtl/rdma_cq_pusher.sv` top (DEBUG_LEVEL parameter wiring)
-6. `tb/DV_PLAN.md`, `tb/DV_HARNESS.md` (already drafted)
-7. `tb/uvm/rdma_cq_pusher_tb_top.sv` + dual env (DEBUG=1, DEBUG=2)
-8. `tb/uvm/shared_scoreboard.sv` (cross-validates DEBUG=1 ledger x DEBUG=2 lineage)
-9. Bucket-file scaffolding (`DV_BASIC.md` / etc.) per `dv-workflow` 15b
-10. `rdma_cq_pusher_hw.tcl` (Qsys IP, exposes DEBUG_LEVEL knob defaulting to 0)
-11. Standalone signoff (synthesizes at DEBUG_LEVEL=1)
+4. `rtl/rdma_cq_pusher.sv` top (DEBUG_LEVEL parameter wiring and sim-only sidecar threading)
+5. `tb/DV_PLAN.md`, `tb/DV_HARNESS.md` (already drafted)
+6. `tb/uvm/rdma_cq_pusher_tb_top.sv` + dual env (DEBUG=1, DEBUG=2)
+7. `tb/uvm/shared_scoreboard.sv` (cross-validates DEBUG=1 ledger x DEBUG=2 lineage)
+8. Bucket-file scaffolding (`DV_BASIC.md` / etc.) per `dv-workflow` 15b
+9. `rdma_cq_pusher_hw.tcl` (Qsys IP, exposes DEBUG_LEVEL knob defaulting to 0)
+10. Standalone signoff (synthesizes at DEBUG_LEVEL=1)
 
 ## 10. Risks specific to this IP
 
