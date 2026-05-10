@@ -43,11 +43,15 @@ SV_SRCS := \
   $(UVM_PKG) \
   $(TB_DIR)/rdma_cq_pusher_if.sv \
   $(RTL_SRCS) \
+  $(TB_DIR)/cqe_agent/cqe_agent_pkg.sv \
+  $(TB_DIR)/host_axi_completer_agent/host_axi_completer_pkg.sv \
   $(TB_DIR)/rdma_cq_pusher_pkg.sv \
   $(TB_DIR)/tb_top.sv
 
 VLOG_FLAGS := -ini $(MODELSIM_INI) -sv -work work \
   +incdir+$(UVM_SRC) +incdir+$(TB_DIR) \
+  +incdir+$(TB_DIR)/cqe_agent \
+  +incdir+$(TB_DIR)/host_axi_completer_agent \
   +define+DEBUG_LEVEL=$(DEBUG_LEVEL) +cover=$(COV_CODE)
 
 VSIM_FLAGS := -ini $(MODELSIM_INI) -c -suppress 19 -suppress 3009 \
