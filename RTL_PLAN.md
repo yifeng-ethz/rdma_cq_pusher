@@ -26,49 +26,67 @@ opq_cq_pusher.sv           (top)
 
 ## 3. Top-level interface
 
+CQE = 64 B (one cacheline). AXI4 master uses `WQE_BUS_W = 512` so one CQE
+write = one AXI4 beat = one host cacheline atomic update. Inter-IP CQE bus
+is **AXI4-Stream**.
+
 ```systemverilog
-module opq_cq_pusher (
-    input  logic         clk,
-    input  logic         reset_n,
+module opq_cq_pusher #(
+    parameter int unsigned WQE_BUS_W = 512   // 64 B CQE = one beat
+) (
+    input  logic                 clk,
+    input  logic                 reset_n,
 
     // Configuration from run_manager (CSR-backed)
-    input  logic [63:0]  cfg_cq_base,
-    input  logic [15:0]  cfg_cq_depth,        // power of 2
-    input  logic         cfg_enable,
+    input  logic [63:0]          cfg_cq_base,
+    input  logic [15:0]          cfg_cq_depth,        // power of 2
+    input  logic                 cfg_enable,
 
-    // Doorbell from CSR (host gives credit)
-    input  logic         cq_head_dbl_pulse,
-    input  logic [15:0]  cq_head_dbl_value,   // host-consumed up to here
+    // Doorbell from CSR
+    input  logic                 cq_head_dbl_pulse,
+    input  logic [15:0]          cq_head_dbl_value,
 
-    // CQE stream in from run_manager (Avalon-ST sink)
-    input  logic [63:0]  cqe_data,            // packed cqe_t
-    input  logic         cqe_valid,
-    output logic         cqe_ready,
+    // CQE stream in from run_manager (AXI4-Stream sink, 1 beat = 1 CQE)
+    input  logic [WQE_BUS_W-1:0] s_axis_cqe_tdata,
+    input  logic                 s_axis_cqe_tvalid,
+    output logic                 s_axis_cqe_tready,
+    input  logic                 s_axis_cqe_tlast,    // always 1
+    input  logic [15:0]          s_axis_cqe_tuser,    // sqe_id
 
-    // CQ tail (FW's producer pointer, sampled by run_manager into csr.CQ_TAIL)
-    output logic [15:0]  cq_tail,
+    // CQ tail (FW producer pointer, sampled by run_manager into csr.CQ_TAIL)
+    output logic [15:0]          cq_tail,
 
-    // Avalon-MM master (write path)
-    output logic [63:0]  avm_address,
-    output logic         avm_write,
-    output logic [63:0]  avm_writedata,
-    output logic [7:0]   avm_byteenable,
-    output logic [3:0]   avm_burstcount,
-    input  logic         avm_waitrequest,
+    // AXI4 (full) write-only master
+    output logic [3:0]           m_axi_awid,
+    output logic [63:0]          m_axi_awaddr,
+    output logic [7:0]           m_axi_awlen,         // = 0 (one beat)
+    output logic [2:0]           m_axi_awsize,        // = $clog2(WQE_BUS_W/8)
+    output logic [1:0]           m_axi_awburst,       // INCR
+    output logic                 m_axi_awvalid,
+    input  logic                 m_axi_awready,
+    output logic [WQE_BUS_W-1:0] m_axi_wdata,
+    output logic [WQE_BUS_W/8-1:0] m_axi_wstrb,       // all-1s (full cacheline)
+    output logic                 m_axi_wlast,         // 1 on the single beat
+    output logic                 m_axi_wvalid,
+    input  logic                 m_axi_wready,
+    input  logic [3:0]           m_axi_bid,
+    input  logic [1:0]           m_axi_bresp,
+    input  logic                 m_axi_bvalid,
+    output logic                 m_axi_bready,
 
-    // MSI-X (Phase 2 — tied to 0 in Phase 1)
-    output logic         msix_req,
-    output logic [4:0]   msix_vector,
-    input  logic         msix_ack,
+    // MSI-X (Phase 2 — tied off in Phase 1)
+    output logic                 msix_req,
+    output logic [4:0]           msix_vector,
+    input  logic                 msix_ack,
 
-    // Sideband counters
-    output logic [31:0]  cnt_cqe_posted
+    // Sideband counter
+    output logic [31:0]          cnt_cqe_posted
 );
 ```
 
-AVMM data width here is **64 bits** because one CQE is exactly 64b and the
-write rate is low (one per SQE completion). Phase 2 may widen if multiple
-CQEs queue up.
+The 512-bit AXI4 wdata + all-1s wstrb means the host sees a **single
+atomic cacheline write** for each CQE. No torn read: the host either
+sees the entire previous CQE or the entire new one.
 
 ## 4. Behavior
 
@@ -81,18 +99,27 @@ Maintains:
 `cq_full = ((cq_tail + 1) & (cq_depth-1)) == cq_head`. Push stalls when
 full.
 
-### 4.2 Push FSM (3 states)
+### 4.2 Push FSM (4 states, AXI4)
 
 ```
 IDLE
-  | cqe_valid && !cq_full && cfg_enable
+  | s_axis_cqe_tvalid && !cq_full && cfg_enable
   v
-PUSH_REQ                    ← avm_address = cfg_cq_base + cq_tail*8
-                              avm_writedata = cqe_data
-                              avm_byteenable = 8'hFF
-                              avm_burstcount = 1
-                              avm_write = 1
-  | !waitrequest
+AW                            ← m_axi_awaddr  = cfg_cq_base + cq_tail*64
+                                 m_axi_awlen   = 0       (1 beat)
+                                 m_axi_awsize  = $clog2(WQE_BUS_W/8)
+                                 m_axi_awburst = INCR
+                                 m_axi_awvalid = 1
+  | awvalid && awready
+  v
+W                             ← m_axi_wdata  = s_axis_cqe_tdata
+                                 m_axi_wstrb  = all-1s
+                                 m_axi_wlast  = 1
+                                 m_axi_wvalid = 1
+  | wvalid && wready
+  v
+B                             ← await m_axi_bvalid; check bresp == OKAY
+  | bvalid && bready
   v
 ADVANCE_TAIL: cq_tail <- (cq_tail + 1) & (cfg_cq_depth-1)
               cnt_cqe_posted++
@@ -103,7 +130,7 @@ IDLE
 
 ### 4.3 Backpressure
 
-`cqe_ready = !cq_full && (state == IDLE) && cfg_enable`.
+`s_axis_cqe_tready = !cq_full && (state == IDLE) && cfg_enable`.
 
 If host doesn't drain CQ (no doorbell credit), pusher stalls. Run manager
 in turn stalls SQE consumption — this propagates the right way.
