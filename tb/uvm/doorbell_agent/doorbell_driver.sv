@@ -5,6 +5,7 @@ class doorbell_driver extends uvm_component;
   `uvm_component_utils(doorbell_driver)
 
   doorbell_agent_cfg cfg;
+  uvm_analysis_port #(doorbell_item) ap;
 
   function new(string name, uvm_component parent);
     super.new(name, parent);
@@ -12,6 +13,7 @@ class doorbell_driver extends uvm_component;
 
   function void build_phase(uvm_phase phase);
     super.build_phase(phase);
+    ap = new("ap", this);
     if (!uvm_config_db#(doorbell_agent_cfg)::get(this, "", "cfg", cfg))
       `uvm_fatal("DOORBELL_DRV", "Missing doorbell_agent_cfg")
     if (cfg.vif == null)
@@ -41,6 +43,7 @@ class doorbell_driver extends uvm_component;
       @(negedge cfg.vif.clk);
       cfg.vif.cq_head_dbl_value <= item.value;
       cfg.vif.cq_head_dbl_pulse <= 1'b1;
+      ap.write(item);
       @(negedge cfg.vif.clk);
       cfg.vif.cq_head_dbl_pulse <= 1'b0;
     end

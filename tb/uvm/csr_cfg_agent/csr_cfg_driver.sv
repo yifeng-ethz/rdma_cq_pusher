@@ -5,6 +5,7 @@ class csr_cfg_driver extends uvm_component;
   `uvm_component_utils(csr_cfg_driver)
 
   csr_cfg_agent_cfg cfg;
+  uvm_analysis_port #(csr_cfg_item) ap;
 
   function new(string name, uvm_component parent);
     super.new(name, parent);
@@ -12,6 +13,7 @@ class csr_cfg_driver extends uvm_component;
 
   function void build_phase(uvm_phase phase);
     super.build_phase(phase);
+    ap = new("ap", this);
     if (!uvm_config_db#(csr_cfg_agent_cfg)::get(this, "", "cfg", cfg))
       `uvm_fatal("CSR_CFG_DRV", "Missing csr_cfg_agent_cfg")
     if (cfg.vif == null)
@@ -34,6 +36,7 @@ class csr_cfg_driver extends uvm_component;
       cfg.vif.cfg_cq_base <= item.base;
       cfg.vif.cfg_cq_depth <= item.depth;
       cfg.vif.cfg_enable <= item.enable;
+      ap.write(item);
     end
   endtask
 endclass

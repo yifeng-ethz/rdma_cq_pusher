@@ -32,6 +32,10 @@ TOP := rdma_cq_pusher_tb_top
 TEST ?= rdma_cq_pusher_base_test
 CASE_ID ?= BASE
 COV_CODE ?= sbecft
+SMOKE_CASES := \
+  rdma_cq_pusher_b001_test:B001 \
+  rdma_cq_pusher_b002_test:B002 \
+  rdma_cq_pusher_b003_test:B003
 
 RTL_SRCS := \
   $(IP_DIR)/rtl/rdma_cq_ring_state.sv \
@@ -87,7 +91,10 @@ run_one: compile
 	  -do "coverage save -onexit $(TB_DIR)/cov_after/$(CASE_ID).ucdb; run -all; quit -f"
 
 smoke:
-	$(MAKE) TEST=rdma_cq_pusher_base_test CASE_ID=BASE run_one
+	@for entry in $(SMOKE_CASES); do \
+	  test_name=$${entry%%:*}; case_id=$${entry##*:}; \
+	  $(MAKE) TEST=$$test_name CASE_ID=$$case_id run_one || exit $$?; \
+	done
 
 merge_ucdb:
 	$(VCOVER) merge -out $(BUILD_DIR)/merged.ucdb $(TB_DIR)/cov_after/*.ucdb

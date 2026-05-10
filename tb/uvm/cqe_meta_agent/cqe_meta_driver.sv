@@ -5,6 +5,7 @@ class cqe_meta_driver extends uvm_component;
   `uvm_component_utils(cqe_meta_driver)
 
   cqe_meta_agent_cfg cfg;
+  uvm_analysis_port #(cqe_meta_item) ap;
 
   function new(string name, uvm_component parent);
     super.new(name, parent);
@@ -12,6 +13,7 @@ class cqe_meta_driver extends uvm_component;
 
   function void build_phase(uvm_phase phase);
     super.build_phase(phase);
+    ap = new("ap", this);
     if (!uvm_config_db#(cqe_meta_agent_cfg)::get(this, "", "cfg", cfg))
       `uvm_fatal("CQE_META_DRV", "Missing cqe_meta_agent_cfg")
     if (cfg.vif == null)
@@ -38,6 +40,8 @@ class cqe_meta_driver extends uvm_component;
       do @(posedge cfg.vif.clk); while (cfg.vif.reset_n === 1'b1 &&
                                         !(cfg.vif.s_axis_cqe_tvalid &&
                                           cfg.vif.s_axis_cqe_tready));
+      if (cfg.vif.reset_n === 1'b1)
+        ap.write(item);
       @(negedge cfg.vif.clk);
       cfg.vif.s_axis_cqe_tuser_meta <= '0;
     end

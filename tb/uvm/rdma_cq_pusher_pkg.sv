@@ -172,17 +172,23 @@ package rdma_cq_pusher_pkg;
 
     function void connect_phase(uvm_phase phase);
       super.connect_phase(phase);
-      env_dbg1.cqe_src_agent.ap.connect(scb.cqe_imp);
-      env_dbg1.host_axi_agent.ap.connect(scb.host_imp);
-      env_dbg1.csr_cfg_agent_i.ap.connect(scb.cfg_imp);
-      env_dbg1.doorbell_agent_i.ap.connect(scb.doorbell_imp);
+      env_dbg1.cqe_src_agent.driver.ap.connect(scb.cqe_imp);
+      env_dbg1.host_axi_agent.driver.ap.connect(scb.host_imp);
+      env_dbg1.csr_cfg_agent_i.driver.ap.connect(scb.cfg_imp);
+      env_dbg1.doorbell_agent_i.driver.ap.connect(scb.doorbell_imp);
       env_dbg1.dbg1_mon.ap.connect(scb.dbg1_imp);
-      env_dbg2.cqe_meta_agent_i.ap.connect(scb.meta_imp);
+      env_dbg2.cqe_meta_agent_i.driver.ap.connect(scb.meta_imp);
       env_dbg2.dbg2_mon.ap.connect(scb.dbg2_imp);
     endfunction
   endclass
 
   `include "base_test.sv"
+  `include "sequences/basic/basic_sequences.sv"
+  `include "sequences/edge/edge_sequences.sv"
+  `include "sequences/prof/prof_sequences.sv"
+  `include "tests/rdma_cq_pusher_b001_test.sv"
+  `include "tests/rdma_cq_pusher_b002_test.sv"
+  `include "tests/rdma_cq_pusher_b003_test.sv"
 endpackage
 
 `endif
