@@ -1,12 +1,12 @@
-# `opq_cq_pusher` — RTL Plan
+# `rdma_cq_pusher` — RTL Plan
 
-Status: **PLAN — pending review.** Sibling IP of the `opq_rdma_subsystem`
-supercore (`mu3e-ip-cores/opq_rdma_subsystem/ARCHITECTURE_PLAN.md`).
+Status: **PLAN — pending review.** Sibling IP of the `rdma_subsystem`
+supercore (`mu3e-ip-cores/rdma_subsystem/ARCHITECTURE_PLAN.md`).
 
 ## 1. Role within the subsystem
 
 Pushes Completion Queue Entries (CQEs) into the host CQ ring in host DRAM.
-Accepts an Avalon-ST CQE stream from `opq_run_manager` and turns each
+Accepts an Avalon-ST CQE stream from `rdma_run_manager` and turns each
 beat into one AVMM write at the next CQ ring slot, then atomically updates
 the FW-owned `cq_tail` pointer (which the host polls from `csr.CQ_TAIL`).
 
@@ -18,10 +18,10 @@ plane CQE bookkeeping.
 ## 2. Module hierarchy
 
 ```
-opq_cq_pusher.sv           (top)
-├── opq_cq_ring_state.sv   (head/tail/depth state)
-├── opq_cq_avmm_writer.sv  (AVMM master that issues 8-byte writes)
-└── opq_cq_msix.sv         (Phase 2 — interrupt generator; Phase 1 stub)
+rdma_cq_pusher.sv           (top)
+├── rdma_cq_ring_state.sv   (head/tail/depth state)
+├── rdma_cq_avmm_writer.sv  (AVMM master that issues 8-byte writes)
+└── rdma_cq_msix.sv         (Phase 2 — interrupt generator; Phase 1 stub)
 ```
 
 ## 3. Top-level interface
@@ -31,7 +31,7 @@ write = one AXI4 beat = one host cacheline atomic update. Inter-IP CQE bus
 is **AXI4-Stream**.
 
 ```systemverilog
-module opq_cq_pusher #(
+module rdma_cq_pusher #(
     parameter int unsigned WQE_BUS_W = 512   // 64 B CQE = one beat
 ) (
     input  logic                 clk,
@@ -137,7 +137,7 @@ in turn stalls SQE consumption — this propagates the right way.
 
 ## 5. Validation plan (unit-level cosim)
 
-Lives at `tb/uvm/opq_cq_pusher_tb_top.sv`.
+Lives at `tb/uvm/rdma_cq_pusher_tb_top.sv`.
 
 | # | Test                                | Pass criterion |
 |---|-------------------------------------|----------------|
@@ -158,7 +158,7 @@ This IP has **no host-visible CSR** of its own. Surfaces:
 
 ## 7. Synthesis sign-off
 
-Standalone Quartus project at `syn/quartus/opq_cq_pusher_standalone.qsf`.
+Standalone Quartus project at `syn/quartus/rdma_cq_pusher_standalone.qsf`.
 Sign-off corner: 1.1× target = 275 MHz.
 
 Estimated logic: ~120 ALMs + tiny CQE-latch RAM.
@@ -166,33 +166,33 @@ Estimated logic: ~120 ALMs + tiny CQE-latch RAM.
 ## 8. Files
 
 ```
-opq_cq_pusher/
+rdma_cq_pusher/
 ├── README.md
 ├── RTL_PLAN.md                      (this file)
 ├── doc/
 ├── rtl/
-│   ├── opq_cq_pusher.sv
-│   ├── opq_cq_ring_state.sv
-│   ├── opq_cq_avmm_writer.sv
-│   └── opq_cq_msix.sv               (Phase 1 stub: ties msix_req=0)
+│   ├── rdma_cq_pusher.sv
+│   ├── rdma_cq_ring_state.sv
+│   ├── rdma_cq_avmm_writer.sv
+│   └── rdma_cq_msix.sv               (Phase 1 stub: ties msix_req=0)
 ├── tb/uvm/
-│   ├── opq_cq_pusher_tb_top.sv
+│   ├── rdma_cq_pusher_tb_top.sv
 │   └── Makefile
 ├── syn/quartus/
-│   └── opq_cq_pusher_standalone.qsf
-├── opq_cq_pusher_hw.tcl
+│   └── rdma_cq_pusher_standalone.qsf
+├── rdma_cq_pusher_hw.tcl
 ├── Makefile
 └── .git/
 ```
 
 ## 9. Implementation order
 
-1. `rtl/opq_cq_ring_state.sv`
-2. `rtl/opq_cq_avmm_writer.sv`
-3. `rtl/opq_cq_msix.sv` (Phase 1 stub)
-4. `rtl/opq_cq_pusher.sv` top
-5. `tb/uvm/opq_cq_pusher_tb_top.sv` + tests 1..7
-6. `opq_cq_pusher_hw.tcl`
+1. `rtl/rdma_cq_ring_state.sv`
+2. `rtl/rdma_cq_avmm_writer.sv`
+3. `rtl/rdma_cq_msix.sv` (Phase 1 stub)
+4. `rtl/rdma_cq_pusher.sv` top
+5. `tb/uvm/rdma_cq_pusher_tb_top.sv` + tests 1..7
+6. `rdma_cq_pusher_hw.tcl`
 7. Standalone signoff
 
 ## 10. Risks specific to this IP
