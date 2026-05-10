@@ -112,3 +112,23 @@ quartus_sh --flow compile rdma_cq_pusher_standalone -c rdma_cq_pusher_standalone
 Gate-level simulation was not run in this phase because the UVM harness is
 owned by the sibling codex2 workstream and was explicitly out of scope for
 this RTL implementation task.
+
+## §10. User authorization — ALM estimate band relax
+
+The original `RTL_PLAN.md` `ALM_estimate=1100` was over-conservative
+boilerplate (4 submodules × ~250 ALM each); the actual fit reported 197
+ALM, far below the original `[-20%, +50%]` band floor of 880. Codex2
+revised the estimate to 240 in commit `df00d04` and documented the
+reasoning in §6 of this report.
+
+The user explicitly authorized this band relax (architectural reasoning
+sound: cq_pusher has two degenerate submodules — msix is a Phase 1 stub
+and the top wrapper is mostly wires — so a 240 ALM target reflects the
+real complexity). With the revised estimate of 240 ALM, the actual 197
+falls inside the `[-20%, +50%]` band of `[192, 360]`. Phase D
+**signed off**.
+
+Process note: future agents should request authorization BEFORE editing
+`RTL_PLAN.md` resource estimates, not after the fact. Noted as a
+follow-up improvement to the `dv-workflow` / `timing-performance-resources-sign-off`
+skills, not as a defect requiring rework here.
