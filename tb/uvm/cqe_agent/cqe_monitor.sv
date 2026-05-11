@@ -33,7 +33,7 @@ class cqe_monitor extends uvm_component;
         cqe_item item;
         item = cqe_item::type_id::create("item");
         item.data = cfg.vif.s_axis_cqe_tdata;
-        item.sqe_id = cfg.vif.s_axis_cqe_tuser;
+        item.rqe_id = cfg.vif.s_axis_cqe_tuser;
         item.last = cfg.vif.s_axis_cqe_tlast;
         item.meta = cfg.vif.s_axis_cqe_tuser_meta;
         item.cycle = cycle;

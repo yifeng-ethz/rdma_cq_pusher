@@ -42,7 +42,7 @@ architecture plan §4 / §5:
    either sees the entire previous CQE or the entire new CQE, never a
    torn fragment.
 5. **AXI4-Stream sink**: one CQE per beat, `s_axis_cqe_tlast=1`,
-   `s_axis_cqe_tuser` carries `sqe_id`. `s_axis_cqe_tready =
+   `s_axis_cqe_tuser` carries `rqe_id`. `s_axis_cqe_tready =
    !cq_full && (state == IDLE) && cfg_enable`.
 6. **Doorbell semantics**: `cq_head` updates atomically on
    `cq_head_dbl_pulse`; `cq_head_dbl_value` is masked by
@@ -69,7 +69,7 @@ architecture plan §4 / §5:
     payload — DEBUG=0 vs DEBUG=1 W/AW/B traces are byte-identical
     cycle-for-cycle.
 13. **DEBUG_LEVEL=2 lineage sidecar** (sim-only): the per-CQE meta
-    sidecar `(sqe_id, retire_seq, origin_dma_done_seq, push_seq)`
+    sidecar `(rqe_id, retire_seq, origin_dma_done_seq, push_seq)`
     is carried alongside the AXI4-Stream input via
     `s_axis_cqe_tuser_meta`. The DEBUG-2 monitor proves that for
     every host CQ slot observed by the DEBUG-1 monitor, exactly one
@@ -116,7 +116,7 @@ Refer to `DV_COV.md` for the strict per-bucket tables. The plan tracks:
     `{0, 1, 2-7, 8-31, 32-127, 128-depth/2, depth/2..depth-1, full}`.
   - `cg_enable_toggle`: enable transitions during a push.
   - `cg_lineage_match` (DEBUG=2 monitor only): per-CQE
-    `(sqe_id, retire_seq, origin_dma_done_seq, push_seq)` lineage
+    `(rqe_id, retire_seq, origin_dma_done_seq, push_seq)` lineage
     bins. Every observed host CQ slot must hit one bin; unmatched
     slots are a closure blocker.
 - **Cross**: `cg_doorbell_race x cg_fsm_state` and
@@ -186,7 +186,7 @@ into legal continuous-frame variants.
 - `../RTL_PLAN.md` — DUT contract source of truth (DEBUG_LEVEL knobs).
 - `../../rdma_subsystem/ARCHITECTURE_PLAN.md` §4 (AXI4 buses) and §5
   (64 B WQE wire format, CQE word layout).
-- `../../rdma_sq_fetcher/tb/DV_PLAN.md` — sibling IP's DV plan in the
+- `../../rdma_rq_fetcher/tb/DV_PLAN.md` — sibling IP's DV plan in the
   same supercore family; format anchor.
 - `../../packet_scheduler/tb/DV_BASIC.md` — bucket file format
   reference (per `dv-workflow` rule 15b).
@@ -208,7 +208,7 @@ into legal continuous-frame variants.
 - **CQ-full propagation** is the only end-to-end backpressure path the
   pusher owns. If the host stalls the doorbell, the pusher must stall
   the CQE stream cleanly without dropping CQEs, and run_manager must in
-  turn stall SQE consumption. The unit harness exercises full-detection
+  turn stall RQE consumption. The unit harness exercises full-detection
   exhaustively (`E001-E064` enumerate every CQ-full corner) so the
   integration TB does not have to rediscover the contract.
 - **AXI4 completer latency** is open until the supercore cosim is built.

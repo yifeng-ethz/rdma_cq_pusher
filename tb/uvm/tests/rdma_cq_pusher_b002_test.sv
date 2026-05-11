@@ -15,7 +15,7 @@ class rdma_cq_pusher_b002_test extends rdma_cq_pusher_base_test;
   task run_case();
     rdma_cq_pusher_single_cqe_seq seq;
     seq = rdma_cq_pusher_single_cqe_seq::type_id::create("seq");
-    seq.sqe_id = 16'h0002;
+    seq.rqe_id = 16'h0002;
     seq.retire_seq = 16'h0002;
     seq.origin_dma_done_seq = 16'h0004;
     seq.push_seq = 16'h0002;

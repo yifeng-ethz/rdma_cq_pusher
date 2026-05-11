@@ -118,14 +118,14 @@ class rdma_cq_pusher_scoreboard extends uvm_scoreboard;
       paired_cqe_t pair;
       cqe = cqe_q.pop_front();
       meta = meta_q.pop_front();
-      if (cqe.sqe_id != meta.sqe_id)
-        note_mismatch($sformatf("CQE/meta sqe_id mismatch cqe=%0d meta=%0d",
-                                cqe.sqe_id, meta.sqe_id));
+      if (cqe.rqe_id != meta.rqe_id)
+        note_mismatch($sformatf("CQE/meta rqe_id mismatch cqe=%0d meta=%0d",
+                                cqe.rqe_id, meta.rqe_id));
       if (cqe.meta != meta.packed_meta)
         note_mismatch($sformatf("CQE/meta packed mismatch cqe=0x%016h meta=0x%016h",
                                 cqe.meta, meta.packed_meta));
       pair.data = cqe.data;
-      pair.sqe_id = cqe.sqe_id;
+      pair.rqe_id = cqe.rqe_id;
       pair.retire_seq = meta.retire_seq;
       pair.origin_dma_done_seq = meta.origin_dma_done_seq;
       pair.push_seq = meta.push_seq;
@@ -196,8 +196,8 @@ class rdma_cq_pusher_scoreboard extends uvm_scoreboard;
         end
         pair = pending_q[0];
         if (item.data !== pair.data)
-          note_mismatch($sformatf("host W payload mismatch slot=%0d sqe_id=%0d",
-                                  item.slot, pair.sqe_id));
+          note_mismatch($sformatf("host W payload mismatch slot=%0d rqe_id=%0d",
+                                  item.slot, pair.rqe_id));
         if (item.strb != 64'hffff_ffff_ffff_ffff)
           note_mismatch($sformatf("WSTRB mismatch got=0x%016h", item.strb));
         if (!item.last)
@@ -263,7 +263,7 @@ class rdma_cq_pusher_scoreboard extends uvm_scoreboard;
         end
       end
       if (cov != null) begin
-        cov.sample_lineage(retired_expected_q[idx].sqe_id,
+        cov.sample_lineage(retired_expected_q[idx].rqe_id,
                            retired_expected_q[idx].retire_seq,
                            matched);
       end
@@ -309,8 +309,8 @@ class rdma_cq_pusher_scoreboard extends uvm_scoreboard;
     $fwrite(fd, "  \"lineage\": [\n");
     foreach (retired_expected_q[idx]) begin
       $fwrite(fd,
-        "    {\"slot\": %0d, \"sqe_id\": %0d, \"retire_seq\": %0d, \"meta\": \"%016h\"}%s\n",
-        retired_expected_q[idx].slot, retired_expected_q[idx].sqe_id,
+        "    {\"slot\": %0d, \"rqe_id\": %0d, \"retire_seq\": %0d, \"meta\": \"%016h\"}%s\n",
+        retired_expected_q[idx].slot, retired_expected_q[idx].rqe_id,
         retired_expected_q[idx].retire_seq, retired_expected_q[idx].packed_meta,
         (idx + 1 == retired_expected_q.size()) ? "" : ",");
     end

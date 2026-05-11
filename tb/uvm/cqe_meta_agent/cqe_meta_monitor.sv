@@ -33,7 +33,7 @@ class cqe_meta_monitor extends uvm_component;
         cqe_meta_item item;
         item = cqe_meta_item::type_id::create("item");
         item.packed_meta = cfg.vif.s_axis_cqe_tuser_meta;
-        item.sqe_id = cfg.vif.s_axis_cqe_tuser_meta[15:0];
+        item.rqe_id = cfg.vif.s_axis_cqe_tuser_meta[15:0];
         item.retire_seq = cfg.vif.s_axis_cqe_tuser_meta[31:16];
         item.origin_dma_done_seq = cfg.vif.s_axis_cqe_tuser_meta[47:32];
         item.push_seq = cfg.vif.s_axis_cqe_tuser_meta[63:48];

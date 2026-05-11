@@ -47,7 +47,7 @@ class cqe_driver extends uvm_component;
 
       @(negedge cfg.vif.clk);
       cfg.vif.s_axis_cqe_tdata <= item.data;
-      cfg.vif.s_axis_cqe_tuser <= item.sqe_id;
+      cfg.vif.s_axis_cqe_tuser <= item.rqe_id;
       cfg.vif.s_axis_cqe_tlast <= item.last;
       cfg.vif.s_axis_cqe_tvalid <= 1'b1;
 

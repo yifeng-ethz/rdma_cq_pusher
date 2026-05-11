@@ -7,7 +7,7 @@ class rdma_cq_pusher_coverage extends uvm_component;
   bit [15:0] sampled_depth;
   bit [3:0]  sampled_state;
   bit [1:0]  sampled_bresp;
-  bit [15:0] sampled_sqe_id;
+  bit [15:0] sampled_rqe_id;
   bit [15:0] sampled_retire_seq;
   bit        sampled_lineage_match;
 
@@ -46,7 +46,7 @@ class rdma_cq_pusher_coverage extends uvm_component;
 
   covergroup cg_lineage_match;
     option.per_instance = 1;
-    cp_sqe: coverpoint sampled_sqe_id {
+    cp_rqe: coverpoint sampled_rqe_id {
       bins low[] = {[16'd0:16'd15]};
       bins high = {[16'd16:16'hffff]};
     }
@@ -84,10 +84,10 @@ class rdma_cq_pusher_coverage extends uvm_component;
     cg_bresp.sample();
   endfunction
 
-  function void sample_lineage(input bit [15:0] sqe_id,
+  function void sample_lineage(input bit [15:0] rqe_id,
                                input bit [15:0] retire_seq,
                                input bit matched);
-    sampled_sqe_id = sqe_id;
+    sampled_rqe_id = rqe_id;
     sampled_retire_seq = retire_seq;
     sampled_lineage_match = matched;
     cg_lineage_match.sample();

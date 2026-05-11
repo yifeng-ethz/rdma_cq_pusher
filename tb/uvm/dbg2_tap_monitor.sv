@@ -37,7 +37,7 @@ class dbg2_tap_monitor extends uvm_component;
         meta = vif.dbg_last_pushed_meta;
         item = dbg2_lineage_item::type_id::create("item");
         item.packed_meta = meta;
-        item.sqe_id = meta[15:0];
+        item.rqe_id = meta[15:0];
         item.retire_seq = meta[31:16];
         item.origin_dma_done_seq = meta[47:32];
         item.push_seq = meta[63:48];

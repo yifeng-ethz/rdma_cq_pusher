@@ -19,7 +19,7 @@ package rdma_cq_pusher_pkg;
 
   typedef struct {
     bit [511:0] data;
-    bit [15:0]  sqe_id;
+    bit [15:0]  rqe_id;
     bit [15:0]  retire_seq;
     bit [15:0]  origin_dma_done_seq;
     bit [15:0]  push_seq;
@@ -57,7 +57,7 @@ package rdma_cq_pusher_pkg;
   class dbg2_lineage_item extends uvm_sequence_item;
     `uvm_object_utils(dbg2_lineage_item)
 
-    bit [15:0]      sqe_id;
+    bit [15:0]      rqe_id;
     bit [15:0]      retire_seq;
     bit [15:0]      origin_dma_done_seq;
     bit [15:0]      push_seq;
@@ -66,7 +66,7 @@ package rdma_cq_pusher_pkg;
 
     function new(string name = "dbg2_lineage_item");
       super.new(name);
-      sqe_id = '0;
+      rqe_id = '0;
       retire_seq = '0;
       origin_dma_done_seq = '0;
       push_seq = '0;

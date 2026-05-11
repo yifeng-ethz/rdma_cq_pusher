@@ -234,7 +234,7 @@ module rdma_cq_pusher #(
         assert (DEBUG_LEVEL <= 2)
             else $fatal(1, "rdma_cq_pusher DEBUG_LEVEL must be 0, 1, or 2");
         assert (DBG_META_W >= 16)
-            else $fatal(1, "rdma_cq_pusher DBG_META_W must include sqe_id");
+            else $fatal(1, "rdma_cq_pusher DBG_META_W must include rqe_id");
     end
     // synthesis translate_on
 

@@ -25,7 +25,7 @@ Construction rule 7 (out-of-order datapath debug ladder):
   at `DEBUG_LEVEL=1`). Carries the **functional payload** monitor and
   **CQE/AXI ledger** scoreboard probe.
 - `DEBUG_LEVEL=2` env: simulation-only widened datapath. Carries
-  per-CQE meta sidecar `(sqe_id, retire_seq, origin_dma_done_seq,
+  per-CQE meta sidecar `(rqe_id, retire_seq, origin_dma_done_seq,
   push_seq)` alongside the AXI4-Stream CQE input. The DEBUG=2 monitor
   proves per-CQE lineage from `rdma_run_manager` retire to host CQ
   slot. Widening is **sim-only** (`generate-if (DEBUG_LEVEL >= 2)`
@@ -35,7 +35,7 @@ Both DEBUG=1 and DEBUG=2 envs run in **parallel under one regression**,
 each producing its own UCDB. They share **one scoreboard**:
 
 - DEBUG=1 probe: ledger of `(host_cq_slot, wdata_payload)` events
-- DEBUG=2 probe: ledger of `(sqe_id, retire_seq, origin_dma_done_seq,
+- DEBUG=2 probe: ledger of `(rqe_id, retire_seq, origin_dma_done_seq,
   push_seq)` events
 - Shared scoreboard cross-validates the two ledgers per case:
   - every CQE in a host CQ slot must map back to a known sidecar
@@ -206,7 +206,7 @@ Drives `s_axis_cqe_*` into the DUT.
 - Transaction class: `cqe_txn_t` carries the eight 64-bit words named
   in architecture plan §5 (`bytes_written_total`, `seg0/1_bytes_written`,
   `status_id`, `event_count`, `first_event_ts`, `last_event_ts`,
-  `opq_drop_snapshot`, `retire_seq`) plus an `sqe_id` sideband.
+  `opq_drop_snapshot`, `retire_seq`) plus an `rqe_id` sideband.
 - Driver options (controllable per case): `inter_beat_gap_cycles`
   (deterministic), `gap_distribution` (uniform / geometric / burst),
   `force_no_backpressure_wait` (cap on time waiting for ready).
@@ -285,7 +285,7 @@ Background observer running in parallel with the active sequence:
 
 - Drives `s_axis_cqe_tuser_meta` =
   `{push_seq[15:0], origin_dma_done_seq[15:0], retire_seq[15:0],
-    sqe_id[15:0]}` aligned with every CQE injected by
+    rqe_id[15:0]}` aligned with every CQE injected by
   `env_dbg1.cqe_src_agent`. The virtual sequencer in `env_top`
   generates a paired `(cqe_txn_t, meta_t)` per beat so the two
   agents stay in lockstep.
@@ -309,7 +309,7 @@ Background observer running in parallel with the active sequence:
 - Samples `dbg_last_pushed_meta` on every B-channel retire
   (`m_axi_bvalid && m_axi_bready && m_axi_bresp == OKAY`) and
   publishes `lineage_observed_e` events to the shared scoreboard.
-  The event carries `(host_cq_slot, sqe_id, retire_seq,
+  The event carries `(host_cq_slot, rqe_id, retire_seq,
   origin_dma_done_seq, push_seq)` so the scoreboard can fuse it
   with the env_dbg1 payload event for the same slot.
 
@@ -348,7 +348,7 @@ State:
 Per-event predictions:
 
 1. On `cqe_observed_e` + `cqe_meta_observed_e` (paired): push the pair
-   into `injected_cqe_q`; record `sqe_id` and lineage tuple for
+   into `injected_cqe_q`; record `rqe_id` and lineage tuple for
    end-to-end matching. Both events must arrive on the same clock or
    the env sequencer is broken; the scoreboard asserts this.
 2. On `aw_observed_e`: assert
@@ -382,8 +382,8 @@ Per-event predictions:
     For each `host_cq_slot` written:
     - find the env_dbg1 payload at `host_cq_shadow[slot]`;
     - find the env_dbg2 lineage at `lineage_map[slot]`;
-    - assert the lineage tuple's `(sqe_id, retire_seq)` matches the
-      payload's `status_id[31:16]` (sqe_id) and `retire_seq` field.
+    - assert the lineage tuple's `(rqe_id, retire_seq)` matches the
+      payload's `status_id[31:16]` (rqe_id) and `retire_seq` field.
     - For each injected `(cqe, meta)` pair:
       - either it lands in a `host_cq_shadow` slot (success), or
       - it is documented as a known drop (legal overwrite, BRESP-error
@@ -397,8 +397,8 @@ End-of-test ledger:
   e.g. backpressure-stuck cases).
 - `expected_cq_tail == dut_cq_tail` (and `dut_cq_tail ==
   dbg_cur_cq_tail`).
-- For every `sqe_id` injected, the host shadow contains exactly one
-  CQE with that `sqe_id` in word 2 bits `[31:16]`.
+- For every `rqe_id` injected, the host shadow contains exactly one
+  CQE with that `rqe_id` in word 2 bits `[31:16]`.
 - For every `host_cq_slot` written, `lineage_map[slot]` exists.
 - `cnt_cqe_posted == #(injected_cqe_q drained with bresp==OKAY)`.
 - `msix_req` never asserted (Phase 1 contract).
@@ -525,7 +525,7 @@ sample covergroups directly so coverage stays decoupled from pass/fail
 verdicts.
 
 `cov_lineage.sv` (DEBUG=2 only) tracks
-`(sqe_id, retire_seq, origin_dma_done_seq, push_seq)` bins. Every
+`(rqe_id, retire_seq, origin_dma_done_seq, push_seq)` bins. Every
 host CQ slot must hit one bin; unmatched slots are a closure blocker.
 
 ## 9. Debug observability
@@ -558,7 +558,7 @@ groups signals as `[CQE_IN]`, `[CQE_META_IN]`, `[AXI_AW]`,
 - `../RTL_PLAN.md` — DUT contract (DEBUG_LEVEL parameter,
   dbg_* ports, sim-only sidecar).
 - `../../rdma_subsystem/ARCHITECTURE_PLAN.md` §4, §5.
-- `../../rdma_sq_fetcher/tb/DV_PLAN.md` — sibling format anchor.
+- `../../rdma_rq_fetcher/tb/DV_PLAN.md` — sibling format anchor.
 - `../../packet_scheduler/tb/DV_HARNESS.md` — house env style anchor
   (build-knob sweeps, DRR cover intent, scoreboard contract).
 - `../../ring-buffer_cam/tb/DV_HARNESS.md` — house monitor pattern

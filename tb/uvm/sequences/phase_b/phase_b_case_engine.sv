@@ -125,13 +125,13 @@ class rdma_cq_pusher_phase_b_case_test extends rdma_cq_pusher_base_test;
     timeout_cycles = practical_timeout(1, aw_lag, w_lag, b_lag);
 
     for (int unsigned idx = 0; idx < count; idx++) begin
-      bit [15:0] sqe;
+      bit [15:0] rqe;
       bit [15:0] seq;
-      sqe = (idx[15:0] ^ {8'h00, case_id.getc(0)}) + 16'd1;
+      rqe = (idx[15:0] ^ {8'h00, case_id.getc(0)}) + 16'd1;
       seq = idx[15:0] + 16'd1;
       if (bresp_every != 0 && ((idx % bresp_every) == 0))
         env.env_dbg1.host_axi_cfg.push_bresp(bresp_code);
-      send_cqe(sqe, seq, seq ^ 16'h1357, seq ^ 16'h2468);
+      send_cqe(rqe, seq, seq ^ 16'h1357, seq ^ 16'h2468);
       wait_for_posts(1, timeout_cycles);
       if (release_each)
         pulse_doorbell(vif.cq_tail);

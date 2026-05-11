@@ -49,7 +49,7 @@ def load_scorecard(path):
 
 def validate_lineage(scorecard_path, data):
     for idx, entry in enumerate(data["lineage"]):
-        for key in ("slot", "sqe_id", "retire_seq", "meta"):
+        for key in ("slot", "rqe_id", "retire_seq", "meta"):
             if key not in entry:
                 raise ValueError(f"{scorecard_path}: lineage[{idx}] missing {key}")
         meta = entry["meta"]

@@ -30,15 +30,15 @@ anchored here.
 | `T_FSM_min` | minimum FSM round-trip with zero-lag completer | 5 clk |
 | `D_cq` | CQ depth (host-side ring slots) | 256 |
 | `R_OPQ_max` | upstream max OPQ event rate | 250 kHz |
-| `R_SQ_max` | upstream max SQE/job rate (one SQE per OPQ-event group) | 250 kHz |
-| `R_CQE_min` | sustainable CQE post rate target | >= R_SQ_max |
+| `R_RQ_max` | upstream max RQE/job rate (one RQE per OPQ-event group) | 250 kHz |
+| `R_CQE_min` | sustainable CQE post rate target | >= R_RQ_max |
 
 All numbers below assume `f_clk = 250 MHz`, `W_AXI = 512 b`, and
 single-id in-order AXI4 master unless otherwise noted.
 
 ---
 
-## 1. CQE rate vs SQE retire rate
+## 1. CQE rate vs RQE retire rate
 
 ### 1.1 Minimum FSM round-trip
 
@@ -83,9 +83,9 @@ T_CQE_worst = 5 + 75 - 1 = 79 clk = 316 ns
 R_CQE_worst = 1 / 316e-9 = 3.2 M CQEs/s
 ```
 
-### 1.3 Sustained CQE rate vs. SQE rate
+### 1.3 Sustained CQE rate vs. RQE rate
 
-The SQE / job rate from `rdma_run_manager` is bounded by the OPQ
+The RQE / job rate from `rdma_run_manager` is bounded by the OPQ
 event rate, which the architecture plan caps at the order of
 `250 kHz` per QP for Phase 1 nominal traffic. Therefore:
 
@@ -99,7 +99,7 @@ R_CQE_sustain = min(R_CQE_typ, R_OPQ_max)
 
 The CQE pusher is **NOT** the bottleneck. Even at worst-case PCIe
 RTT (300 ns), the pusher sustains `~3.2 M CQEs/s`, which is a
-factor of `~13` above the sustainable upstream SQE rate at
+factor of `~13` above the sustainable upstream RQE rate at
 `250 kHz`. This means:
 
 - the CQ ring depth and credit window are dominated by the host
@@ -127,8 +127,8 @@ credit by writing `cq_head` via the doorbell pulse. If the host
 poll cadence is slow relative to the CQE arrival rate, the ring
 fills, `cq_full=1` asserts, and `s_axis_cqe_tready=0`. That
 backpressure propagates back through `rdma_run_manager` (which
-stalls SQE retire) and ultimately stalls `rdma_sq_fetcher` (which
-stalls SQE consumption from host SQ).
+stalls RQE retire) and ultimately stalls `rdma_rq_fetcher` (which
+stalls RQE consumption from host RQ).
 
 ### 2.1 The credit window question
 
@@ -186,7 +186,7 @@ D_cq_min = 250e3 * 10e-3 + 1 = 2501
   a 10x safety margin.
 
 The CQ-full propagation chain is a designed-in feature, not a bug:
-when the host cannot keep up, FW correctly stalls SQE consumption
+when the host cannot keep up, FW correctly stalls RQE consumption
 so the host never overflows. P081-P096 exercise the propagation
 chain end-to-end with deliberately starved doorbells.
 
@@ -195,7 +195,7 @@ This anchors PROF cases:
 - **P065-P080** (credit-window sweep across `D_cq` and
   `T_doorbell` bins) -- §2.3.
 - **P081-P096** (backpressure chain proof: pusher full propagates
-  back to run_manager, which stalls SQ consumption) -- §2.4.
+  back to run_manager, which stalls RQ consumption) -- §2.4.
 
 ---
 
@@ -235,7 +235,7 @@ contents (e.g. checking the `valid` bit in word 2) without any
 fence or memory barrier and is guaranteed to read a fully formed
 CQE or a fully old CQE. The host distinguishes "old" from "new"
 by the CQE `valid` bit (or, equivalently, by checking that the
-`sqe_id` matches the expected next-CQE ID; the FW maintains a
+`rqe_id` matches the expected next-CQE ID; the FW maintains a
 generation bit per slot to disambiguate the wraparound case).
 
 ### 3.3 SVA enforcement
@@ -276,7 +276,7 @@ This anchors BASIC cases:
 ### 4.1 The proof obligation
 
 The DEBUG_LEVEL=2 sim-only widening adds a per-CQE metadata
-sidecar `(sqe_id, retire_seq, origin_dma_done_seq, push_seq)`
+sidecar `(rqe_id, retire_seq, origin_dma_done_seq, push_seq)`
 flowing alongside the AXI4-Stream CQE input through a sim-only
 meta-FIFO that mirrors the W/B inflight depth. The proof
 obligation is: **removing the sidecar must not change any payload

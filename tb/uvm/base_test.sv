@@ -57,26 +57,26 @@ class rdma_cq_pusher_base_test extends uvm_test;
     repeat (cycles) @(posedge vif.clk);
   endtask
 
-  function bit [63:0] pack_meta(input bit [15:0] sqe_id,
+  function bit [63:0] pack_meta(input bit [15:0] rqe_id,
                                 input bit [15:0] retire_seq,
                                 input bit [15:0] origin_dma_done_seq,
                                 input bit [15:0] push_seq);
-    return {push_seq, origin_dma_done_seq, retire_seq, sqe_id};
+    return {push_seq, origin_dma_done_seq, retire_seq, rqe_id};
   endfunction
 
-  function bit [511:0] make_cqe(input bit [15:0] sqe_id,
+  function bit [511:0] make_cqe(input bit [15:0] rqe_id,
                                 input bit [15:0] retire_seq);
     bit [511:0] data;
     bit [63:0] seed;
     data = '0;
-    seed = {sqe_id, retire_seq, sqe_id ^ retire_seq, sqe_id + retire_seq};
+    seed = {rqe_id, retire_seq, rqe_id ^ retire_seq, rqe_id + retire_seq};
     for (int unsigned word = 0; word < 8; word++) begin
       bit [63:0] mixed;
       mixed = seed ^ (64'h9e37_79b9_7f4a_7c15 * (word + 1));
       mixed = {mixed[30:0], mixed[63:31]} ^ (64'hd1b5_4a32_d192_ed03 * (retire_seq + word + 1));
       data[word*64 +: 64] = mixed;
     end
-    data[159:144] = sqe_id;
+    data[159:144] = rqe_id;
     data[143:128] = 16'h0001;
     return data;
   endfunction
@@ -120,7 +120,7 @@ class rdma_cq_pusher_base_test extends uvm_test;
     wait_cycles(2);
   endtask
 
-  task send_cqe(input bit [15:0] sqe_id,
+  task send_cqe(input bit [15:0] rqe_id,
                 input bit [15:0] retire_seq,
                 input bit [15:0] origin_dma_done_seq = 16'h0000,
                 input bit [15:0] push_seq = 16'h0000);
@@ -128,13 +128,13 @@ class rdma_cq_pusher_base_test extends uvm_test;
     cqe_meta_item meta;
 
     cqe = cqe_item::type_id::create("cqe");
-    cqe.sqe_id = sqe_id;
+    cqe.rqe_id = rqe_id;
     cqe.last = 1'b1;
-    cqe.data = make_cqe(sqe_id, retire_seq);
-    cqe.meta = pack_meta(sqe_id, retire_seq, origin_dma_done_seq, push_seq);
+    cqe.data = make_cqe(rqe_id, retire_seq);
+    cqe.meta = pack_meta(rqe_id, retire_seq, origin_dma_done_seq, push_seq);
 
     meta = cqe_meta_item::type_id::create("meta");
-    meta.sqe_id = sqe_id;
+    meta.rqe_id = rqe_id;
     meta.retire_seq = retire_seq;
     meta.origin_dma_done_seq = origin_dma_done_seq;
     meta.push_seq = push_seq;
@@ -144,20 +144,20 @@ class rdma_cq_pusher_base_test extends uvm_test;
     env.env_dbg2.meta_cfg.enqueue(meta);
   endtask
 
-  task send_cqe_with_last(input bit [15:0] sqe_id,
+  task send_cqe_with_last(input bit [15:0] rqe_id,
                           input bit [15:0] retire_seq,
                           input bit last);
     cqe_item cqe;
     cqe_meta_item meta;
 
     cqe = cqe_item::type_id::create("cqe_last");
-    cqe.sqe_id = sqe_id;
+    cqe.rqe_id = rqe_id;
     cqe.last = last;
-    cqe.data = make_cqe(sqe_id, retire_seq);
-    cqe.meta = pack_meta(sqe_id, retire_seq, retire_seq, retire_seq);
+    cqe.data = make_cqe(rqe_id, retire_seq);
+    cqe.meta = pack_meta(rqe_id, retire_seq, retire_seq, retire_seq);
 
     meta = cqe_meta_item::type_id::create("meta_last");
-    meta.sqe_id = sqe_id;
+    meta.rqe_id = rqe_id;
     meta.retire_seq = retire_seq;
     meta.origin_dma_done_seq = retire_seq;
     meta.push_seq = retire_seq;

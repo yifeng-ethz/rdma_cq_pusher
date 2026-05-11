@@ -44,7 +44,7 @@ rule 7 (out-of-order datapath debug ladder):
 |--:|---|---|
 | `0` | Functional payload only. All `dbg_*` debug-1 outputs tie off (constant 0). The DEBUG-2 sidecar input `s_axis_cqe_tuser_meta` is ignored. | Yes (production default). |
 | `1` | Adds CQ-ring-state and AXI4-channel observability via `dbg_*` output ports for SignalTap and TB monitors. **No functional change** to the AXI4-Stream / AXI4 master payload. The sidecar input is still ignored. | Yes (debug-1 outputs are SignalTap-friendly and tied off if not consumed). |
-| `2` | **Simulation-only.** Activates a sim-only widened sidecar field on the CQE input stream that carries per-CQE lineage `(sqe_id, retire_seq, originating_dma_done_seq, push_seq)`. The DEBUG-2 monitor proves end-to-end CQE lineage from `rdma_run_manager` retire to host CQ slot. | **No.** Synthesis must hold `DEBUG_LEVEL <= 1`. The sim-only sidecar wires are guarded with `// synthesis translate_off` / `_on` and a `generate-if (DEBUG_LEVEL >= 2)` block. |
+| `2` | **Simulation-only.** Activates a sim-only widened sidecar field on the CQE input stream that carries per-CQE lineage `(rqe_id, retire_seq, originating_dma_done_seq, push_seq)`. The DEBUG-2 monitor proves end-to-end CQE lineage from `rdma_run_manager` retire to host CQ slot. | **No.** Synthesis must hold `DEBUG_LEVEL <= 1`. The sim-only sidecar wires are guarded with `// synthesis translate_off` / `_on` and a `generate-if (DEBUG_LEVEL >= 2)` block. |
 
 `DEBUG_LEVEL` is cumulative: `>= 1` enables debug-1 taps, `>= 2`
 additionally enables the sim-only sidecar.
@@ -55,7 +55,7 @@ module rdma_cq_pusher #(
     parameter int unsigned DEBUG_LEVEL = 0,    // 0=prod, 1=tap, 2=sim-only sidecar
     // SIM-ONLY (DEBUG_LEVEL >= 2): width of the per-CQE lineage sidecar
     parameter int unsigned DBG_META_W  = 64    // {push_seq[15:0], origin_dma_done_seq[15:0],
-                                               //  retire_seq[15:0], sqe_id[15:0]}
+                                               //  retire_seq[15:0], rqe_id[15:0]}
 ) (
     input  logic                 clk,
     input  logic                 reset_n,
@@ -74,7 +74,7 @@ module rdma_cq_pusher #(
     input  logic                 s_axis_cqe_tvalid,
     output logic                 s_axis_cqe_tready,
     input  logic                 s_axis_cqe_tlast,    // always 1
-    input  logic [15:0]          s_axis_cqe_tuser,    // sqe_id
+    input  logic [15:0]          s_axis_cqe_tuser,    // rqe_id
 
     // CQ tail (FW producer pointer, sampled by run_manager into csr.CQ_TAIL)
     output logic [15:0]          cq_tail,
@@ -126,7 +126,7 @@ module rdma_cq_pusher #(
     // pragmas so synthesis only ever sees a tied-off zero.
     // ----------------------------------------------------------------
     // synthesis translate_off
-    , input  logic [DBG_META_W-1:0] s_axis_cqe_tuser_meta  // {push_seq, origin_dma_done_seq, retire_seq, sqe_id}
+    , input  logic [DBG_META_W-1:0] s_axis_cqe_tuser_meta  // {push_seq, origin_dma_done_seq, retire_seq, rqe_id}
     , output logic [DBG_META_W-1:0] dbg_last_pushed_meta   // meta of most recent retired CQE
     // synthesis translate_on
 );
@@ -139,7 +139,7 @@ sees the entire previous CQE or the entire new one.
 The DEBUG-2 sidecar **does not** flow into AXI4 wdata. It propagates
 through sim-only sidecar registers in `rdma_cq_axi_writer.sv` parallel
 to the W/B path so the DEBUG-2 monitor can map every host CQ slot back to a
-`(sqe_id, retire_seq, origin_dma_done_seq, push_seq)` tuple. The
+`(rqe_id, retire_seq, origin_dma_done_seq, push_seq)` tuple. The
 functional path is bit-identical regardless of `DEBUG_LEVEL`.
 
 ## 4. Behavior
@@ -187,7 +187,7 @@ IDLE
 `s_axis_cqe_tready = !cq_full && (state == IDLE) && cfg_enable`.
 
 If host doesn't drain CQ (no doorbell credit), pusher stalls. Run manager
-in turn stalls SQE consumption — this propagates the right way.
+in turn stalls RQE consumption — this propagates the right way.
 
 ## 5. Validation plan (unit-level cosim)
 
@@ -209,7 +209,7 @@ shared scoreboard is in `tb/DV_HARNESS.md` (per `dv-workflow` rule 7).
 | 7 | Counter accuracy                    | cnt_cqe_posted == # of host-observed CQEs |
 | 8 | (Phase 2 only) MSI-X fires once     | 1 MSI-X req per push when enabled |
 | 9 | DEBUG=1 status taps                 | dbg_cur_cq_tail / dbg_cur_cq_head_credit / dbg_cq_full / dbg_aw_pending / dbg_b_inflight / dbg_ring_full_stall_cyc / dbg_state mirror DUT state every cycle, with no functional change vs DEBUG=0 (bit-identical W/AW/B trace) |
-| 10 | DEBUG=2 lineage end-to-end         | every host CQ slot (DEBUG=1 monitor) maps back 1:1 to a `(sqe_id, retire_seq, origin_dma_done_seq, push_seq)` tuple injected upstream (DEBUG=2 monitor); shared scoreboard cross-validates DEBUG=1 payload x DEBUG=2 lineage |
+| 10 | DEBUG=2 lineage end-to-end         | every host CQ slot (DEBUG=1 monitor) maps back 1:1 to a `(rqe_id, retire_seq, origin_dma_done_seq, push_seq)` tuple injected upstream (DEBUG=2 monitor); shared scoreboard cross-validates DEBUG=1 payload x DEBUG=2 lineage |
 
 ## 6. CSR exposure
 
@@ -316,7 +316,7 @@ rdma_cq_pusher/
 - **CQE atomicity**: writing 64 B with one AXI4 beat covers the full
   CQE; no torn write possible at this granularity. If Phase 2 widens
   CQE format, revisit.
-- **CQ depth power-of-2** required (same as SQ).
+- **CQ depth power-of-2** required (same as RQ).
 - **MSI-X vector**: Phase 2 needs a real vector. Phase 1 ties to 0.
 - **DEBUG_LEVEL=1 must not perturb the functional path.** The dbg_*
   outputs are flopped views of state already inferred by the FSM and

@@ -57,8 +57,8 @@ present in a system, reaches the run-manager CSR aperture rather than this IP.
 | `s_axis_cqe_tvalid` | 1 | sink | CQE beat is valid. Accepted only when the ring is not full, the writer is idle, `cfg_enable=1`, and `tlast=1`. |
 | `s_axis_cqe_tready` | 1 | source | Backpressure to `rdma_run_manager`; deasserts on full CQ ring, disabled IP, malformed beat, or active write. |
 | `s_axis_cqe_tlast` | 1 | sink | Must be `1` on every accepted beat. Multi-beat CQEs are illegal. |
-| `s_axis_cqe_tuser` | 16 | sink | `sqe_id`; RTL asserts that `s_axis_cqe_tdata[159:144] == s_axis_cqe_tuser`. |
-| `s_axis_cqe_tuser_meta` | `DBG_META_W` (`64`) | sink, sim-only | DEBUG_LEVEL >= 2 lineage sidecar `{push_seq, origin_dma_done_seq, retire_seq, sqe_id}`. Guarded by `synthesis translate_off`. |
+| `s_axis_cqe_tuser` | 16 | sink | `rqe_id`; RTL asserts that `s_axis_cqe_tdata[159:144] == s_axis_cqe_tuser`. |
+| `s_axis_cqe_tuser_meta` | `DBG_META_W` (`64`) | sink, sim-only | DEBUG_LEVEL >= 2 lineage sidecar `{push_seq, origin_dma_done_seq, retire_seq, rqe_id}`. Guarded by `synthesis translate_off`. |
 | `dbg_last_pushed_meta` | `DBG_META_W` (`64`) | source, sim-only | Most recent retired CQE lineage tuple for the DEBUG_LEVEL=2 monitor. |
 
 There are no Avalon-ST data ports and no OPQ K-symbol sideband in this IP.
@@ -109,14 +109,14 @@ meaning. This IP uses the constrained write-only subset below.
 
 ### 3.4 CQE 64-byte payload layout
 
-The pusher treats the CQE as opaque data except for the `sqe_id` assertion at
+The pusher treats the CQE as opaque data except for the `rqe_id` assertion at
 `tdata[159:144]`. The current supercore CQE contract is:
 
 | Word | Byte offset | Name | Width | Description |
 |---:|---:|---|---:|---|
-| 0 | `0x00` | `bytes_written_total` | 64 | Total bytes written across both SQE segments. |
+| 0 | `0x00` | `bytes_written_total` | 64 | Total bytes written across both RQE segments. |
 | 1 | `0x08` | `seg0_bytes_written` / `seg1_bytes_written` | 32 / 32 | Segment-local byte counts, low then high. |
-| 2 | `0x10` | `status_id` | 64 | `[15:0]=status`, `[31:16]=sqe_id`, `[63:32]=flags`. |
+| 2 | `0x10` | `status_id` | 64 | `[15:0]=status`, `[31:16]=rqe_id`, `[63:32]=flags`. |
 | 3 | `0x18` | `event_count` | 64 | Number of OPQ end-of-event boundaries observed. |
 | 4 | `0x20` | `first_event_ts` | 64 | OPQ timestamp of the first event in the drain. |
 | 5 | `0x28` | `last_event_ts` | 64 | OPQ timestamp of the last event in the drain. |
@@ -130,7 +130,7 @@ The pusher treats the CQE as opaque data except for the `sqe_id` assertion at
 | 2 | `HALT` | Backpressure/drop condition; host should investigate. |
 | 3 | `SEG_BOUNDARY_HIT` | Payload crossed from segment 0 to segment 1. |
 | 4 | `SEG0_ONLY` | Only segment 0 was used. |
-| 5 | `ALIGN_ERR` | SQE address or span failed alignment constraints upstream. |
+| 5 | `ALIGN_ERR` | RQE address or span failed alignment constraints upstream. |
 | 6-15 | reserved | Must be ignored by host software. |
 
 ## 4. How to start
@@ -227,7 +227,7 @@ status snapshot at `../rdma_subsystem/PHASE_STATUS.md` records
 |---|---|
 | Parent supercore | `../rdma_subsystem/ARCHITECTURE_PLAN.md` |
 | Supercore phase status | `../rdma_subsystem/PHASE_STATUS.md` |
-| SQE producer sibling | `../rdma_sq_fetcher/RTL_PLAN.md` |
+| RQE producer sibling | `../rdma_rq_fetcher/RTL_PLAN.md` |
 | DMA worker sibling | `../rdma_dma_engine/RTL_PLAN.md` |
 | Coordinator and CSR owner | `../rdma_run_manager/RTL_PLAN.md` |
 | FEB SciFi project style guide | `/home/yifeng/packages/online_dpv2/online/fe_board/fe_scifi/README.md` |

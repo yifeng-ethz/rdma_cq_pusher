@@ -9,7 +9,7 @@ package cqe_agent_pkg;
     `uvm_object_utils(cqe_item)
 
     bit [511:0]      data;
-    bit [15:0]       sqe_id;
+    bit [15:0]       rqe_id;
     bit              last;
     bit [63:0]       meta;
     longint unsigned cycle;
@@ -17,7 +17,7 @@ package cqe_agent_pkg;
     function new(string name = "cqe_item");
       super.new(name);
       data = '0;
-      sqe_id = '0;
+      rqe_id = '0;
       last = 1'b1;
       meta = '0;
       cycle = 0;
